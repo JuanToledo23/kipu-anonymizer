@@ -46,6 +46,20 @@ make evaluate-full     # live run, validar.mjs and the 5 public tests
 validator, every test by family (directa, oculta, falso_positivo, homonimos, consistencia,
 indirecta) and exits 1 on any failure.
 
+```bash
+make preflight                                        # sweep data/out_full vs the newest data/raw/<run>
+make preflight PREFLIGHT_OUT=data/preflight PREFLIGHT_RAW=data/raw/<run>
+```
+
+`scripts/preflight.py <out> --raw <data/raw/<run>> [--public <dir>]` is the hostile sweep run
+before requesting an evaluation. With the judge's `contiene` it looks for every master-table
+value (clientes, empleados, cédula and agente of pqrs), every users.json name, handle, email and
+phone, and every person or email in doc metadata; it lists emails, phones, plates and cédulas in
+the output that are not declared surrogates, searches UPPERCASE-without-accents name forms, and
+checks structure against `record_index.json` (ids once, columns, metadata keys, attachments). It
+prints a table and exits 1 on any real hit. Categorical columns (`tipo_doc`, `barrio`,
+`ocupacion`, `notas`) and plain amounts are not counted.
+
 ## Architecture
 
 1. **Ingest**: `HttpSource`/`DirSource` → normalized chat, doc and table records.

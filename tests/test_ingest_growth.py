@@ -22,10 +22,9 @@ from kipu.pipeline import run
 
 ROOT = Path(__file__).resolve().parent.parent
 SAMPLE = ROOT / "data" / "sample" / "input"
-RAW_RUNS = sorted(
-    (p for p in (ROOT / "data" / "raw").glob("*") if (p / "chats" / "users.json").is_file()),
-    key=lambda p: p.stat().st_mtime,
-)
+# Pinned snapshots: run 1's corpus and the grown one (Págalo migration), never "the newest".
+OLD_RAW = ROOT / "data" / "raw" / "5e3e6756311e"
+GROWN_RAW = ROOT / "data" / "raw" / "growth_20261031T215550"
 URL = "http://sources.test/v1"
 
 
@@ -192,9 +191,10 @@ def unused_number(raw: Path, start: int) -> str:
     return str(value)
 
 
-@pytest.mark.skipif(not RAW_RUNS, reason="no raw run under data/raw")
-def test_growth_keeps_old_persons_and_pseudonyms(tmp_path: Path) -> None:
-    raw = RAW_RUNS[-1]
+@pytest.mark.parametrize("raw", [OLD_RAW, GROWN_RAW], ids=["run1", "grown"])
+def test_growth_keeps_old_persons_and_pseudonyms(tmp_path: Path, raw: Path) -> None:
+    if not (raw / "chats" / "users.json").is_file():
+        pytest.skip(f"{raw.name} is not under data/raw")
     user, row = known_client_user(raw)
     new_phone = unused_number(raw, 3157778800)
     new_cedula = unused_number(raw, 1020304050)

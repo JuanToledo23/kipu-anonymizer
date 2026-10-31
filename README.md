@@ -22,6 +22,9 @@ DATA_DIR=data/sample_run uv run python -m kipu.pipeline --source dir:data/sample
   --out data/sample_run/output                                           # sample, own registry
 ```
 
+Every route is served at both `/v1/...` and `/...`. With `ENTRYPOINT_TOKEN` set, all routes
+require `Authorization: Bearer <token>` except `GET /health` (no secrets in it).
+
 Real runs use `DATA_DIR=data`; the sample always uses `DATA_DIR=data/sample_run` so its persons
 never enter the real registry.
 

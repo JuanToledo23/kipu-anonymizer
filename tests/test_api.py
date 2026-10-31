@@ -44,10 +44,15 @@ def test_anonymize_validates_schema(tmp_path: Path) -> None:
     assert record["author"] in record["text"]
 
 
-def test_optional_bearer_auth(tmp_path: Path) -> None:
+def test_optional_bearer_auth_with_public_health(tmp_path: Path) -> None:
     client = TestClient(create_app(settings(tmp_path, token="abc")))
-    assert client.get("/v1/health").status_code == 401
-    assert client.get("/v1/health", headers={"Authorization": "Bearer abc"}).status_code == 200
+    auth = {"Authorization": "Bearer abc"}
+    for base in ("/v1", ""):
+        assert client.get(f"{base}/health").json()["status"] == "ok"
+        assert client.get(f"{base}/entities").status_code == 401
+        assert client.get(f"{base}/entities", headers=auth).status_code == 404
+        assert client.post(f"{base}/anonymize", json={}).status_code == 401
+        assert client.post(f"{base}/anonymize", json={}, headers=auth).status_code == 422
 
 
 def test_new_person_owns_the_identifiers_next_to_the_name(tmp_path: Path) -> None:

@@ -1,4 +1,4 @@
-"""HTTP service per api/participante.openapi.yaml, mounted under /v1."""
+"""HTTP service per api/participante.openapi.yaml, mounted under /v1 and at the root."""
 
 import datetime as dt
 import logging
@@ -147,9 +147,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if expected and authorization != f"Bearer {expected}":
             raise HTTPException(status_code=401, detail="unauthorized")
 
-    router = APIRouter(prefix="/v1", dependencies=[Depends(authorize)])
+    public = APIRouter()
+    router = APIRouter(dependencies=[Depends(authorize)])
 
-    @router.get("/health")
+    @public.get("/health")
     def health() -> dict[str, Any]:
         return {"status": "ok", "team": TEAM, "version": __version__, "models": []}
 
@@ -185,7 +186,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             ) from exc
         return anonymizer.anonymize(request.source, records)
 
-    app.include_router(router)
+    # The platform health check and the judge may use either base path; /health exposes no secrets.
+    for prefix in ("/v1", ""):
+        app.include_router(public, prefix=prefix)
+        app.include_router(router, prefix=prefix)
     return app
 
 

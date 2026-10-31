@@ -22,7 +22,7 @@ Python 3.13, uv, FastAPI + uvicorn, httpx, pydantic v2, PyMuPDF, lxml, regex, or
 ## Commands
 - install: `make install` (= `uv sync`)
 - lint: `make lint`; tests: `make test` (run `make lint test` before every commit)
-- sample run + eval: `make evaluate-sample`
+- sample run + eval: `make evaluate-sample` (uses `DATA_DIR=data/sample_run`, apart from real runs)
 - full run + eval (needs `.env`): `make evaluate-full`
 - service: `./run.sh` (port `$PORT`, default 9000) → `curl localhost:9000/v1/health`
 - docker: `make docker-build`, then `docker run -p 9000:9000 --env-file .env -v kipu-data:/data kipu-anonymizer`

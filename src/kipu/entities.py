@@ -8,7 +8,16 @@ from kipu.audit.texto import contiene
 from kipu.replace.render import Renderer
 
 KEPT_REASON = "organización, lugar, marca o figura pública; no es persona natural"
-SINGLE_VALUE_FIELDS = ("email", "phone", "cedula", "birth_iso", "address", "plate", "passport")
+SINGLE_VALUE_FIELDS = (
+    "email",
+    "phone",
+    "cedula",
+    "birth_iso",
+    "address",
+    "plate",
+    "passport",
+    "handle",
+)
 
 
 @dataclass
@@ -47,7 +56,7 @@ def declared_pseudonyms(used: dict[str, list[str]], output_texts: list[str]) -> 
         if chosen:
             pseudonyms[field_name] = chosen
     handles = used.get("handle", [])
-    if handles and "name" not in pseudonyms:
+    if handles and "name" not in pseudonyms and "handle" not in pseudonyms:
         pseudonyms["handle"] = handles[0]
     return pseudonyms
 

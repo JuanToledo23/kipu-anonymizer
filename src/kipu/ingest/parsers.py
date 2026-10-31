@@ -55,6 +55,9 @@ class RawCorpus:
     pdf_xmp: dict[str, str] = field(default_factory=dict)
     record_index: dict[str, list[str]] | None = None
 
+    def records(self) -> list[ChatRecord | DocRecord | TableRecord]:
+        return [*self.chats, *self.docs, *self.tables]
+
 
 def load_corpus(source: SourceClient) -> RawCorpus:
     users = source.users()

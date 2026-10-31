@@ -187,3 +187,73 @@ class KeptMatcher:
                 continue
             found.append(Mention(start, end, span, "KEPT", value=term))
         return found
+
+
+AT_HANDLE = re.compile(r"(?<![\w.<@])@([A-Za-z][A-Za-z0-9._-]*[A-Za-z0-9])")
+SLACK_BROADCASTS = frozenset({"here", "channel", "everyone", "all"})
+MIN_HANDLE = 4
+
+
+class HandleMatcher:
+    """Known handles (users.json `name`, email local parts) as whole tokens anywhere: URLs,
+    filenames, `@mentions`. A handle shared by several persons keeps them all as candidates
+    for context to decide; unknown `@handle` mentions are emitted without an owner."""
+
+    def __init__(self, persons: Iterable[Person], kept: KeptMatcher) -> None:
+        owners: dict[str, set[str]] = defaultdict(set)
+        for person in persons:
+            for handle in person.handles() | person.identifiers.get("handle", set()):
+                owners[handle.lower()].add(person.person_id)
+        names = set(GIVEN) | {fold(s) for s in SURNAMES}
+        self.owners = {
+            h: tuple(sorted(pids, key=_person_order))
+            for h, pids in owners.items()
+            if len(h) >= MIN_HANDLE and not h.isdigit() and fold(h) not in names
+        }
+        self.kept = kept
+        alternation = "|".join(re.escape(h) for h in sorted(self.owners, key=len, reverse=True))
+        self.known = (
+            re.compile(rf"(?<![A-Za-z0-9])(?:{alternation})(?![A-Za-z0-9])", re.I)
+            if alternation
+            else None
+        )
+
+    def scan(self, text: str) -> list[Mention]:
+        found = []
+        if self.known:
+            for m in self.known.finditer(text):
+                value = m.group(0).lower()
+                pids = self.owners[value]
+                owner = pids[0] if len(pids) == 1 else None
+                found.append(
+                    Mention(
+                        m.start(),
+                        m.end(),
+                        m.group(0),
+                        "HANDLE",
+                        owner,
+                        value=value,
+                        candidates=pids,
+                    )
+                )
+        taken = {(m.start, m.end) for m in found}
+        for m in AT_HANDLE.finditer(text):
+            value = m.group(1).lower()
+            if (m.start(1), m.end(1)) in taken or not self._personal(value):
+                continue
+            found.append(Mention(m.start(1), m.end(1), m.group(1), "HANDLE", value=value))
+        return found
+
+    def _personal(self, value: str) -> bool:
+        tokens = tuple(TOKEN.findall(fold(value)))
+        return (
+            len(value) >= MIN_HANDLE
+            and value not in SLACK_BROADCASTS
+            and "kipu" not in value
+            and tokens not in self.kept.terms
+        )
+
+
+def _person_order(person_id: str) -> tuple[int, str]:
+    suffix = person_id.rsplit("_", 1)[-1]
+    return (int(suffix) if suffix.isdigit() else -1, person_id)

@@ -1,7 +1,16 @@
 from dataclasses import dataclass, field, replace
 
 # Labels that carry a person identifier and get a surrogate.
-IDENTIFIER_LABELS = ("EMAIL", "CEDULA", "PHONE", "PLATE", "PASSPORT", "BIRTH", "ADDRESS")
+IDENTIFIER_LABELS = (
+    "EMAIL",
+    "CEDULA",
+    "PHONE",
+    "PLATE",
+    "PASSPORT",
+    "BIRTH",
+    "ADDRESS",
+    "HANDLE",
+)
 
 # Overlap resolution: longer span wins, then lower number here.
 PRIORITY = {
@@ -12,6 +21,7 @@ PRIORITY = {
     "PLATE": 1,
     "BIRTH": 1,
     "ADDRESS": 1,
+    "HANDLE": 1,
     "SLACK": 1,
     "NAME": 2,
     "KEPT": 3,

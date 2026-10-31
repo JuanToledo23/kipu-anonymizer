@@ -16,7 +16,13 @@ SPELLED_EMAIL = re.compile(
     re.I,
 )
 DIGIT_RUN = re.compile(r"(?<![\d])(\+?\d+(?:[ .\-]\d+)*)(?![\d])")
-PLATE = re.compile(r"(?<![A-Za-z0-9])([A-Z]{3}\d{3}|[A-Z]{3}\d{2}[A-Z])(?![A-Za-z0-9])")
+# Cars `AAA123`, motorcycles `AAA12A`, optionally with a dash or space after the letters.
+# Currency codes and uppercase street abbreviations share the shape and are excluded.
+NOT_PLATE_PREFIXES = "COP|USD|EUR|CVV|PIN|NIT|INC|PQR|OTP|SMS|ATM|PSE|CRA|CLL|KRA|AVE|DIG|TRV|CAL"
+PLATE = re.compile(
+    rf"(?<![A-Za-z0-9])(?!(?:{NOT_PLATE_PREFIXES})[- ]?\d)"
+    r"([A-Z]{3}[- ]?(?:\d{3}|\d{2}[A-Z]))(?![A-Za-z0-9]|[.,]\d)"
+)
 PASSPORT_CONTEXT = re.compile(
     r"(?:pasaporte|passport)(?:\s+(?:number|no\.?|n[úu]mero))?(?:\s+(?:is|es|:))?\s*", re.I
 )
@@ -120,7 +126,8 @@ def _looks_like_money(text: str, start: int, end: int) -> bool:
 
 def find_plates(text: str) -> Iterator[Mention]:
     for m in PLATE.finditer(text):
-        yield Mention(m.start(1), m.end(1), m.group(1), "PLATE", value=m.group(1))
+        value = re.sub(r"[- ]", "", m.group(1))
+        yield Mention(m.start(1), m.end(1), m.group(1), "PLATE", value=value)
 
 
 def find_passports(text: str) -> Iterator[Mention]:

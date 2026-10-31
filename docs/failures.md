@@ -54,3 +54,33 @@ and the test that now covers it.
 - **Fix**: one mention per span carrying every strong candidate; the nearest evidence picks.
 - **Test**: `tests/test_names.py::test_one_mention_keeps_every_homonym_candidate` and
   `tests/test_render.py::test_homonyms_split_by_nearby_client_id`.
+
+## 6. Client handles leaked inside URLs and @mentions
+
+- **Symptom**: the pre-flight sweep of the deployed output found the users.json handles of three
+  clients: `?ref=agomez&canal=chat`, `kit?u=khenao&lang=en` (chats) and `publica como @arojas`
+  (`doc_23`), next to a correctly replaced name.
+- **Root cause**: handles were only indexed as names when they had two tokens (`maria.lopez`);
+  single-token handles and email local parts were never matched, and `@` mentions of unknown
+  handles were not a detector at all. A dotted agent id shared with a client homonym
+  (`andres.gomez`) also resolved by name to the client instead of the employee who owns it.
+- **Fix**: `HANDLE` is a first-class identifier. `HandleMatcher` matches every known handle
+  (users.json `name`, email local parts) case-insensitively as a whole token delimited by
+  non-alphanumerics, plus unknown `@handle` mentions; the surrogate is the local part of the
+  surrogate email, reserved in SQLite, and declared as `pseudonyms.handle`. Surrogate emails
+  never reuse a real handle as local part.
+- **Test**: `tests/test_handles.py` (URLs, paths, filenames, `@` mentions, boundaries, unknown
+  handles, shared handles) and `tests/test_surrogates.py::test_handle_surrogate_follows_the_email_rule`.
+
+## 7. Plates with a separator were not detected
+
+- **Symptom**: the sweep found `JXA-971` (chat `ea88fd5f…`) and `GTD-596`
+  (`transacciones:TX-000552`, `TX-000685`) unchanged; `GTD596` without the dash was replaced.
+- **Root cause**: the plate pattern only accepted `AAA123`/`AAA12A`; the generator for
+  same-shape surrogates also turned separators into digits.
+- **Fix**: plates accept a dash or space after the letters (currency codes and uppercase street
+  abbreviations excluded); the value is normalized to the compact form, so `GTD596` and
+  `GTD-596` share one surrogate, which is written back with the original separator. Plates seen
+  anywhere in the input are reserved as real values before rendering.
+- **Test**: `tests/test_patterns.py::test_plates_both_classes_with_and_without_separators`,
+  `test_plate_shaped_non_plates` and `tests/test_surrogates.py::test_surrogate_plate_keeps_its_class`.

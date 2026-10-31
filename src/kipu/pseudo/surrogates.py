@@ -123,11 +123,30 @@ class SurrogateFactory:
                 str(counter // len(PERSONAL_DOMAINS)) if counter >= len(PERSONAL_DOMAINS) else ""
             )
             if domain.endswith(CORPORATE_DOMAIN):
-                return f"{given}.{surname}{counter or ''}@{CORPORATE_DOMAIN}"
-            pick = PERSONAL_DOMAINS[(rng.randrange(len(PERSONAL_DOMAINS)) + counter) % 5]
-            return f"{given[0]}{surname}{suffix}@{pick}"
+                local = f"{given}.{surname}{counter or ''}"
+                pick = CORPORATE_DOMAIN
+            else:
+                local = f"{given[0]}{surname}{suffix}"
+                pick = PERSONAL_DOMAINS[(rng.randrange(len(PERSONAL_DOMAINS)) + counter) % 5]
+            # The local part doubles as a handle; a real person's handle must not reappear.
+            return None if self.is_real("handle", local) else f"{local}@{pick}"
 
         return self._reserve(person, "email", original.lower(), make, normalize=str.lower)
+
+    def handle(self, person: Person, original: str, email: str | None = None) -> str:
+        """Same rule as the email local part; the surrogate email's own local part when the
+        handle is the local part of one of the person's emails."""
+        local = self.email(person, email).split("@", 1)[0] if email else None
+        name = self.name(person)
+        given, surname = ascii_token(name.given[0]), ascii_token(name.surnames[0])
+        base = f"{given}.{surname}" if "." in original else f"{given[0]}{surname}"
+
+        def make(rng: random.Random, counter: int) -> str:
+            if local and counter == 0:
+                return local
+            return f"{base}{counter or ''}"
+
+        return self._reserve(person, "handle", original.lower(), make, normalize=str.lower)
 
     def cedula(self, person: Person, original: str) -> str:
         def make(rng: random.Random, _: int) -> str | None:
@@ -165,6 +184,7 @@ class SurrogateFactory:
         return self._reserve(person, "address", original, make)
 
     def plate(self, person: Person, original: str) -> str:
+        """`original` is the compact plate (`GTD596`); the renderer restores the separator."""
         return self._reserve(person, "plate", original, self._same_shape(original), str.upper)
 
     def passport(self, person: Person, original: str) -> str:
@@ -174,7 +194,11 @@ class SurrogateFactory:
     def _same_shape(original: str):
         def make(rng: random.Random, _: int) -> str | None:
             value = "".join(
-                rng.choice(string.ascii_uppercase) if c.isalpha() else rng.choice(string.digits)
+                rng.choice(string.ascii_uppercase)
+                if c.isalpha()
+                else rng.choice(string.digits)
+                if c.isdigit()
+                else c
                 for c in original
             )
             return None if value == original else value

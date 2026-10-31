@@ -66,3 +66,20 @@ def test_birth_dates_iso_and_slashes() -> None:
 def test_addresses() -> None:
     found = list(find_addresses("Vivo en Cl 47 # 41-29 apto 1001, Barranquilla."))
     assert [m.text for m in found] == ["Cl 47 # 41-29 apto 1001"]
+
+
+def test_plates_both_classes_with_and_without_separators() -> None:
+    text = "carro JXA-971, JXA971 y JXA 971; moto ABC-12D, ABC12D y ABC 12D"
+    assert [(m.text, m.value) for m in find_plates(text)] == [
+        ("JXA-971", "JXA971"),
+        ("JXA971", "JXA971"),
+        ("JXA 971", "JXA971"),
+        ("ABC-12D", "ABC12D"),
+        ("ABC12D", "ABC12D"),
+        ("ABC 12D", "ABC12D"),
+    ]
+
+
+def test_plate_shaped_non_plates() -> None:
+    text = "COP 500.000, USD 100, INC-2026-031, PQR-2026-0451, KP-005, CRA 12A # 3-4, JXAB971"
+    assert not list(find_plates(text))

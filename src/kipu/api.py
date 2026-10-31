@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
 from kipu import __version__
 from kipu.anonymizer import Anonymizer
+from kipu.audit.auditor import record_text
 from kipu.config import Settings, load_settings
 from kipu.directory.directory import Directory
 from kipu.directory.registry import Registry
@@ -130,6 +131,7 @@ class AnonymizeService:
                 anonymizer = Anonymizer(
                     registry, Directory.from_registry(registry), self.settings.pseudonym_secret
                 )
+                anonymizer.observe(record_text(r.model_dump()) for r in records)
                 outputs = getattr(anonymizer, source)(records)
                 return {"records": outputs, "entities": anonymizer.entities(outputs)}
             finally:

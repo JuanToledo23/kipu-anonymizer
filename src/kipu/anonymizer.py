@@ -1,12 +1,14 @@
 """Detect → resolve → replace for normalized records. Shared by the batch pipeline and the API."""
 
 from collections import defaultdict
+from collections.abc import Iterable
 from typing import Any
 
 from kipu.audit.auditor import record_text
 from kipu.detect.engine import Detector, Group, Surface
 from kipu.detect.mention import IDENTIFIER_LABELS, Mention
 from kipu.detect.names import TOKEN, KeptMatcher, NameIndex
+from kipu.detect.patterns import find_plates
 from kipu.directory.directory import Directory
 from kipu.directory.names import fold
 from kipu.directory.registry import Registry
@@ -48,16 +50,21 @@ class Anonymizer:
         self.index = NameIndex(directory.persons.values())
         self.kept = KeptMatcher()
         self.detector = Detector(directory, self.index, self.kept)
-        forbidden_names, forbidden_tokens, observed = _forbidden(directory)
+        forbidden_names, forbidden_tokens, self.observed = _forbidden(directory)
         self.factory = SurrogateFactory(
             registry,
             secret,
             forbidden_names,
             forbidden_tokens,
-            lambda field, value: _is_real(directory, observed, field, value),
+            lambda field, value: _is_real(directory, self.observed, field, value),
         )
         self.renderer = Renderer(self.factory, directory)
         self.ledger = EntityLedger()
+
+    def observe(self, texts: Iterable[str]) -> None:
+        """Plates seen anywhere in the input, so no surrogate plate reproduces one of them."""
+        for text in texts:
+            self.observed.update(m.value for m in find_plates(text))
 
     def _apply(self, group: Group) -> dict[tuple[str, str], str]:
         """Detect over the group and return the replaced text of every surface."""

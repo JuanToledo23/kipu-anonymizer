@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass, field
 
 from kipu.detect.mention import IDENTIFIER_LABELS, Mention, resolve_overlaps
-from kipu.detect.names import KeptMatcher, NameIndex
+from kipu.detect.names import HandleMatcher, KeptMatcher, NameIndex
 from kipu.detect.patterns import asks_for_cedula, digits_of, find_digit_runs, find_identifiers
 from kipu.directory.directory import Directory, Person
 from kipu.directory.names import fold
@@ -21,6 +21,7 @@ ID_TYPES = {
     "PASSPORT": "passport",
     "BIRTH": "birth_iso",
     "ADDRESS": "address",
+    "HANDLE": "handle",
 }
 RECORD_KEY = re.compile(r"\b(CL-\d{4,6}|KP-\d{3}|PQR-\d{4}-\d{4})\b")
 RECORD_KEY_TYPES = {"CL-": "cliente_id", "KP-": "kp_id", "PQR": "radicado"}
@@ -48,10 +49,17 @@ class Group:
 
 
 class Detector:
-    def __init__(self, directory: Directory, index: NameIndex, kept: KeptMatcher) -> None:
+    def __init__(
+        self,
+        directory: Directory,
+        index: NameIndex,
+        kept: KeptMatcher,
+        handles: HandleMatcher | None = None,
+    ) -> None:
         self.directory = directory
         self.index = index
         self.kept = kept
+        self.handles = handles or HandleMatcher(directory.persons.values(), kept)
 
     def detect(self, group: Group) -> dict[tuple[str, str], list[Mention]]:
         raw = self._candidates(group)
@@ -76,6 +84,7 @@ class Detector:
             found = find_identifiers(surface.text, requested)
             found += self._known_numbers(surface.text)
             found += self.index.scan(surface.text)
+            found += self.handles.scan(surface.text)
             found += self.kept.scan(surface.text)
             found += [
                 Mention(m.start(), m.end(), m.group(0), "RECORD_KEY", value=m.group(0))
@@ -111,6 +120,8 @@ class Detector:
         return list(dict.fromkeys(ordered))
 
     def _evidence_owner(self, m: Mention) -> str | None:
+        if m.label == "HANDLE" and len(m.candidates) > 1:
+            return None
         if m.label in ID_TYPES:
             return m.person_id or self.directory.owner_of(ID_TYPES[m.label], m.value)
         if m.label == "RECORD_KEY":
@@ -132,6 +143,9 @@ class Detector:
             return None
         if m.label == "SLACK":
             return m.with_person(self.directory.owner_of("uid", m.value))
+        if m.label == "HANDLE" and not m.person_id and m.candidates:
+            # Shared handle: thread context first, else the newest person (latest corpus).
+            return m.with_person(_choose(m.candidates, [], context) or m.candidates[-1])
         if m.label != "NAME" or m.kind == "external":
             return m
         nearby = sorted(
@@ -193,6 +207,8 @@ class Detector:
         preceding = [o for o in owned if o.label == "NAME" and o.person_id and o.end <= m.start]
         if preceding and m.start - preceding[-1].end <= 4:
             return preceding[-1].person_id
+        if m.label == "HANDLE":
+            return None
         if group.kind == "table":
             return group.owner
         author = group.authors.get(surface.record_id)

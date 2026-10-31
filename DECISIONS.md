@@ -4,12 +4,19 @@
 
 - **Direct identifiers**: full names and every variant (given + first surname, first name alone
   when the person takes part in the thread or is a uniquely named employee, surname after a title,
-  UPPERCASE without accents, filename tokens like `manuela_castano`, handles like `@maria.lopez`
-  and bare agent ids like `fernanda.vargas`), emails (also spelled "arroba"/"punto"), cédulas
-  (with or without dots; by context word, as the reply to a cédula request, or because the value
-  is known), phones (10 digits starting with 3, optional +57, any grouping), plates (`AAA123`,
-  `AAA12A`), passports (by context), birth dates (ISO and dd/mm/yyyy, mm/dd/yyyy), addresses
-  (Colombian street grammar), Slack mentions `<@UID>`.
+  UPPERCASE without accents, filename tokens like `manuela_castano`), handles (users.json `name`
+  and every email local part, as whole tokens anywhere: `?ref=agomez&`, `@arojas`, agent ids
+  like `fernanda.vargas`; unknown `@handle` mentions too), emails (also spelled
+  "arroba"/"punto"), cédulas (with or without dots; by context word, as the reply to a cédula
+  request, or because the value is known), phones (10 digits starting with 3, optional +57, any
+  grouping), plates (`AAA123`, `AAA-123`, `AAA 123`, motorcycles `AAA12A`/`AAA-12A`), passports
+  (by context), birth dates (ISO and dd/mm/yyyy, mm/dd/yyyy), addresses (Colombian street
+  grammar), Slack mentions `<@UID>`.
+- **Handle and plate surrogates**: a handle becomes the local part of the person's surrogate
+  email (same rule: `given.surname` for dotted handles, initial + surname otherwise); a plate
+  keeps its class (letters/digits per position) and separator and never equals a plate seen in
+  the input. Both are reserved in SQLite. A handle shared by two persons goes to the one in the
+  thread's context, else to the newest person in the registry.
 - **Where**: chat text, author, attachment filenames, doc filename/title/body (front matter,
   HTML comments and `<meta>` kept as raw lines), every metadata value, every table cell.
 - **Third parties** not in any master table: "Given Surname" sequences built from name lexicons

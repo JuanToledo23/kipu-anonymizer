@@ -13,7 +13,7 @@ from typing import Any
 import orjson
 
 from kipu.anonymizer import Anonymizer
-from kipu.audit.auditor import audit
+from kipu.audit.auditor import audit, record_text
 from kipu.config import Settings, load_settings
 from kipu.directory.directory import Directory
 from kipu.directory.registry import Registry
@@ -82,6 +82,7 @@ def run(source: SourceClient, out_dir: Path, settings: Settings) -> RunReport:
     try:
         directory, authors = build_directory(corpus, registry)
         anonymizer = Anonymizer(registry, directory, settings.pseudonym_secret)
+        anonymizer.observe(record_text(r.model_dump()) for r in corpus.records())
         outputs = {
             "chats": anonymizer.chats(corpus.chats, authors),
             "docs": anonymizer.docs(corpus.docs),

@@ -115,6 +115,8 @@ class Directory:
             self.registry.add_identifier(person.person_id, id_type, value, raw, source)
         person.identifiers.setdefault(id_type, set()).add(raw)
         self.by_id[(id_type, value)] = person.person_id
+        if id_type == "email" and "@" in raw:
+            self.attach(person, "handle", raw.split("@", 1)[0], source)
         return True
 
     def owner_of(self, id_type: str, raw: str) -> str | None:

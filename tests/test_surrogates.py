@@ -1,6 +1,7 @@
 from conftest import SECRET
 from kipu.directory.names import fold
-from kipu.pseudo.surrogates import SurrogateFactory
+from kipu.pseudo.surrogates import SurrogateFactory, ascii_token
+from kipu.replace.render import fit_alnum
 
 
 def factory(registry, directory) -> SurrogateFactory:
@@ -64,3 +65,24 @@ def test_real_values_are_never_reused(registry, directory) -> None:
     f = SurrogateFactory(registry, SECRET, set(), set(), lambda field, value: value in taken)
     p = person(directory, "CL-88627")
     assert f.birth(p, "1998-01-01") not in taken
+
+
+def test_surrogate_plate_keeps_its_class(registry, directory) -> None:
+    observed = {"JXA971", "GTD596"}
+    f = SurrogateFactory(registry, SECRET, set(), set(), lambda field, value: value in observed)
+    p = person(directory, "CL-88627")
+    car, moto = f.plate(p, "JXA971"), f.plate(p, "ABC12D")
+    assert car[:3].isalpha() and car[:3].isupper() and car[3:].isdigit() and len(car) == 6
+    assert moto[:3].isalpha() and moto[3:5].isdigit() and moto[5].isalpha()
+    assert car not in observed and f.plate(p, "JXA971") == car
+    assert fit_alnum("JXA-971", car) == f"{car[:3]}-{car[3:]}"
+    assert fit_alnum("ABC 12D", moto) == f"{moto[:3]} {moto[3:]}"
+
+
+def test_handle_surrogate_follows_the_email_rule(registry, directory) -> None:
+    f = factory(registry, directory)
+    p = person(directory, "CL-88627")
+    local = f.email(p, "mcastano@gmail.com").split("@")[0]
+    assert f.handle(p, "mcastano", "mcastano@gmail.com") == local
+    given = ascii_token(f.name(p).given[0])
+    assert f.handle(p, "manuela.castano").startswith(f"{given}.")

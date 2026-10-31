@@ -46,6 +46,12 @@ def fit_digits(span: str, digits: str) -> str:
     return "".join(out)
 
 
+def fit_alnum(span: str, value: str) -> str:
+    """Write `value` into the letter and digit slots of `span`, keeping its separators."""
+    chars = iter(value)
+    return "".join(next(chars, c) if c.isalnum() else c for c in span)
+
+
 def format_date(iso: str, kind: str) -> str:
     year, month, day = iso.split("-")
     if kind == "dmy":
@@ -158,7 +164,20 @@ class Renderer:
         return self._note(person.person_id, "address", self.factory.address(person, m.value))
 
     def _render_plate(self, m: Mention, person: Person) -> str:
-        return self._note(person.person_id, "plate", self.factory.plate(person, m.value))
+        value = fit_alnum(m.text, self.factory.plate(person, m.value))
+        return self._note(person.person_id, "plate", value)
+
+    def _render_handle(self, m: Mention, person: Person) -> str:
+        email = next(
+            (
+                e
+                for e in sorted(person.identifiers.get("email", set()))
+                if e.split("@", 1)[0].lower() == m.value
+            ),
+            None,
+        )
+        value = self._note(person.person_id, "handle", self.factory.handle(person, m.value, email))
+        return value.upper() if case_style(m.text) == "upper" else value
 
     def _render_passport(self, m: Mention, person: Person) -> str:
         return self._note(person.person_id, "passport", self.factory.passport(person, m.value))

@@ -97,7 +97,7 @@ def build_entities(
                 "records": records,
             }
         )
-    _drop_shared_originals(entities)
+    entities = _drop_shared_originals(entities)
     for i, term in enumerate(sorted(ledger.kept), start=1):
         entities.append(
             {
@@ -123,17 +123,26 @@ def _oldest_first(renderer: Renderer, person_id: str) -> dict[str, list[str]]:
     }
 
 
-def _drop_shared_originals(entities: list[dict[str, Any]]) -> None:
+def _drop_shared_originals(entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """A form declared by two entities ("Luis Santander" for two homonyms) names neither;
-    looking a person up by it would find both. It stays replaced in the records."""
+    looking a person up by it would find both. It stays replaced in the records. An entity
+    known only by shared forms (two third parties called "María") keeps them if it is the
+    oldest to; a newer one is not declared, so growth never removes an entity."""
     owners: dict[str, int] = defaultdict(int)
     for entity in entities:
         for form in {norm(o) for o in entity["originals"]}:
             owners[form] += 1
+    declared, taken = [], set()
     for entity in entities:
+        forms = {norm(o) for o in entity["originals"]}
         kept = [o for o in entity["originals"] if owners[norm(o)] == 1]
         if kept:
             entity["originals"] = kept
+        elif forms & taken:
+            continue
+        taken |= {norm(o) for o in entity["originals"]}
+        declared.append(entity)
+    return declared
 
 
 def _sort_key(person_id: str) -> tuple[int, str]:

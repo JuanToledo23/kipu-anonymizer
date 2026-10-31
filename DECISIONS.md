@@ -49,6 +49,8 @@
 - `person_id` and every surrogate live in `$DATA_DIR/registry.sqlite`; surrogates are seeded by
   HMAC(secret, person_id|field|original|counter) and reserved with UNIQUE constraints, and they
   never reproduce a real name or identifier value.
+- `pseudonyms.name` is always the canonical short form (given names + first surname), in
+  `entities.json` and in `/anonymize`. Other rendered forms are still written but not declared.
 
 ## Supuestos verificados con la muestra
 

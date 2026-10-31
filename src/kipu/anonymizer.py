@@ -15,7 +15,7 @@ from kipu.directory.registry import Registry
 from kipu.directory.seed import norm_identifier
 from kipu.entities import EntityLedger, build_entities
 from kipu.ingest.records import ChatRecord, DocRecord, TableRecord
-from kipu.pseudo.surrogates import SurrogateFactory
+from kipu.pseudo.surrogates import SurrogateFactory, SurrogateName
 from kipu.replace.generalize import sector_for, swap_barrio
 from kipu.replace.render import Renderer, apply_mentions
 
@@ -43,13 +43,18 @@ FORM_LABELS = {"NAME", *IDENTIFIER_LABELS}
 
 
 class Anonymizer:
-    def __init__(self, registry: Registry, directory: Directory, secret: str) -> None:
+    def __init__(
+        self, registry: Registry, directory: Directory, secret: str, live: bool = False
+    ) -> None:
+        """`live` (the API): values we already wrote as surrogates are left untouched."""
         self.registry = registry
         self.directory = directory
         self.secret = secret
+        self.live = live
         self.index = NameIndex(directory.persons.values())
         self.kept = KeptMatcher()
-        self.detector = Detector(directory, self.index, self.kept)
+        surrogates = _surrogate_values(registry) if live else None
+        self.detector = Detector(directory, self.index, self.kept, surrogates=surrogates)
         forbidden_names, forbidden_tokens, self.observed = _forbidden(directory)
         self.factory = SurrogateFactory(
             registry,
@@ -132,6 +137,8 @@ class Anonymizer:
     def author_person(self, author: str) -> str | None:
         """Person behind an author display name; unknown human names become new persons."""
         tokens = tuple(TOKEN.findall(fold(author)))
+        if " ".join(tokens) in self.detector.surrogates:  # a pseudonym copied from our output
+            return None
         hits = self.index.entries.get(tokens, {})
         strong = sorted(p for p, kind in hits.items() if kind in ("full", "short"))
         if strong:
@@ -197,7 +204,7 @@ class Anonymizer:
 
     def entities(self, outputs: list[dict[str, Any]]) -> list[dict[str, Any]]:
         texts = {o["id"]: record_text(o) for o in outputs}
-        return build_entities(self.ledger, self.renderer, texts)
+        return build_entities(self.ledger, self.renderer, texts, strict=not self.live)
 
 
 def _is_number(value: str) -> bool:
@@ -211,6 +218,19 @@ def _is_number(value: str) -> bool:
 def _is_real(directory: Directory, observed: set[str], field: str, value: str) -> bool:
     normalized = norm_identifier(field, value)
     return normalized in observed or directory.owner_of(field, normalized) is not None
+
+
+def _surrogate_values(registry: Registry) -> set[str]:
+    """Normalized surrogate names (short and full), emails, phones and cédulas."""
+    values: set[str] = set()
+    for field, value in registry.surrogate_values():
+        if field == "name":
+            name = SurrogateName.decode(value)
+            values.update({fold(name.short), fold(name.full)})
+        elif field in ("email", "phone", "cedula"):
+            values.add(norm_identifier(field, value))
+    values.discard("")
+    return values
 
 
 def _forbidden(directory: Directory) -> tuple[set[str], set[str], set[str]]:

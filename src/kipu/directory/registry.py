@@ -165,6 +165,9 @@ class Registry:
             self.journal("reserve", {"person_id": person_id, "field": field})
             return True
 
+    def surrogate_values(self) -> list[tuple[str, str]]:
+        return self.conn.execute("SELECT field, value FROM surrogates").fetchall()
+
     def record_forms(self, rows: list[tuple[str, str, str]]) -> None:
         with self.transaction() as c:
             c.executemany("INSERT OR IGNORE INTO observed_forms VALUES (?, ?, ?)", rows)

@@ -9,10 +9,11 @@ from dataclasses import dataclass, field, replace
 
 from kipu.audit.texto import CONFUSABLES, RX_CONFUSABLE
 from kipu.detect.mention import IDENTIFIER_LABELS, Mention, resolve_overlaps
-from kipu.detect.names import HandleMatcher, KeptMatcher, NameIndex
+from kipu.detect.names import HandleMatcher, KeptMatcher, NameIndex, ngrams, tokenize
 from kipu.detect.patterns import asks_for_cedula, digits_of, find_digit_runs, find_identifiers
 from kipu.directory.directory import Directory, Person
 from kipu.directory.names import fold
+from kipu.directory.seed import norm_identifier
 
 ID_TYPES = {
     "EMAIL": "email",
@@ -56,11 +57,13 @@ class Detector:
         index: NameIndex,
         kept: KeptMatcher,
         handles: HandleMatcher | None = None,
+        surrogates: set[str] | None = None,
     ) -> None:
         self.directory = directory
         self.index = index
         self.kept = kept
         self.handles = handles or HandleMatcher(directory.persons.values(), kept)
+        self.surrogates = surrogates or set()
 
     def detect(self, group: Group) -> dict[tuple[str, str], list[Mention]]:
         raw = self._candidates(group)
@@ -68,8 +71,9 @@ class Detector:
         resolved: dict[tuple[str, str], list[Mention]] = {}
         for surface in group.surfaces:
             key = (surface.record_id, surface.field)
+            ours = self._surrogate_spans(surface.text)
             assigned = (self._assign(m, raw[key], context, group.prefer) for m in raw[key])
-            mentions = [m for m in assigned if m]
+            mentions = [m for m in assigned if m and not self._is_surrogate(m, ours)]
             mentions += self._quasi(surface, context)
             owned: list[Mention] = []
             for m in resolve_overlaps(mentions):
@@ -172,6 +176,29 @@ class Detector:
             if chosen is None:
                 return None
         return m.with_person(chosen)
+
+    def _surrogate_spans(self, text: str) -> list[tuple[int, int]]:
+        """Spans of surrogate names we wrote earlier (an input copied from our output)."""
+        if not self.surrogates:
+            return []
+        folded, tokens = tokenize(text)
+        return [
+            (tokens[i].start, tokens[j - 1].end)
+            for i, j, window in ngrams(text, folded, tokens)
+            if len(window) >= 2 and " ".join(window) in self.surrogates
+        ]
+
+    def _is_surrogate(self, m: Mention, ours: list[tuple[int, int]]) -> bool:
+        """Leave values we wrote earlier as they are."""
+        if not self.surrogates:
+            return False
+        if m.label == "NAME" and m.kind not in STRONG_NAME_KINDS:
+            return any(start <= m.start and m.end <= end for start, end in ours)
+        if m.label in ID_TYPES and m.label != "HANDLE" and not m.person_id:
+            id_type = ID_TYPES[m.label]
+            value = norm_identifier(id_type, m.value or m.text)
+            return value in self.surrogates and self.directory.owner_of(id_type, value) is None
+        return False
 
     def _sole_employee(self, m: Mention) -> str | None:
         """Staff are talked about by first name; take it when exactly one employee has it."""

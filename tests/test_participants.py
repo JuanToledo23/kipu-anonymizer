@@ -6,6 +6,7 @@ from kipu.audit.texto import contiene
 from kipu.directory.directory import Directory
 from kipu.directory.registry import Registry
 from kipu.directory.seed import seeds_from_users
+from kipu.ingest.records import ChatRecord
 from test_render import chat
 
 SAMPLE = Path(__file__).resolve().parent.parent / "data" / "sample"
@@ -67,3 +68,13 @@ def test_cyrillic_lookalikes_are_detected(anonymizer) -> None:
     out = anonymizer.chats([chat("1", text, author="Kipi")])[0]["text"]
     assert not contiene(out, "Manuela Castaño")
     assert not contiene(out, text.split(",")[0])
+
+
+def test_live_mode_leaves_our_own_surrogates_alone(registry, directory) -> None:
+    first = Anonymizer(registry, directory, SECRET)
+    text = "Soy Manuela Castaño, correo mcastano@gmail.com, cel 3148729552"
+    copied = first.chats([chat("1", text, author="Kipi")])[0]
+    live = Anonymizer(registry, Directory.from_registry(registry), SECRET, live=True)
+    again = live.chats([ChatRecord(**{**copied, "author": "Kipi", "attachments": []})])
+    assert again[0]["text"] == copied["text"]
+    assert live.entities(again) == []

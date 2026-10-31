@@ -129,7 +129,10 @@ class AnonymizeService:
             registry = Registry(self.settings.registry_path)
             try:
                 anonymizer = Anonymizer(
-                    registry, Directory.from_registry(registry), self.settings.pseudonym_secret
+                    registry,
+                    Directory.from_registry(registry),
+                    self.settings.pseudonym_secret,
+                    live=True,
                 )
                 anonymizer.observe(record_text(r.model_dump()) for r in records)
                 outputs = getattr(anonymizer, source)(records)

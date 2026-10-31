@@ -85,6 +85,23 @@ and the test that now covers it.
 - **Test**: `tests/test_patterns.py::test_plates_both_classes_with_and_without_separators`,
   `test_plate_shaped_non_plates` and `tests/test_surrogates.py::test_surrogate_plate_keeps_its_class`.
 
+## 8. `/anonymize` declared a different name form than `entities.json`
+
+- **Symptom**: red-team cases B01, B05, B09, B12, B13 and B14 returned the right `entity_id` and
+  surrogate, but `pseudonyms.name` was "Given Surname1 Surname2" live and "Given Surname1" in
+  `entities.json`. A record copied from our own output also created a new person (the pseudonym
+  author was read as an unknown name).
+- **Root cause**: `declared_pseudonyms` declared the longest name form rendered in the records at
+  hand, so the declared name depended on the batch. In the API, nothing knew which values were
+  our own surrogates.
+- **Fix**: `pseudonyms.name` is always the registry's short form (given names + first surname).
+  In `entities.json`, the validator still requires the value to appear in the person's records,
+  so a person written only by given name declares that instead. The API (`live=True`) skips
+  surrogate names, emails, phones and cédulas from the registry that no real person owns: they
+  stay unchanged and are not declared.
+- **Test**: `tests/test_canonical_name.py`,
+  `tests/test_participants.py::test_live_mode_leaves_our_own_surrogates_alone`.
+
 ## 9. Lowercase given names of thread participants
 
 - **Symptom**: 25 chats kept the agent's first name in a lowercase thank-you ("mil gracias!! x",

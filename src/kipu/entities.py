@@ -79,7 +79,7 @@ def build_entities(
     for person_id in sorted(ledger.originals, key=_sort_key):
         records = sorted(ledger.records[person_id])
         texts = [texts_by_record[r] for r in records if r in texts_by_record]
-        used = renderer.used.get(person_id, {})
+        used = _oldest_first(renderer, person_id)
         canonical = (
             renderer.factory.name(renderer.directory.persons[person_id]).short
             if any(used.get(f) for f in NAME_FIELDS)
@@ -111,6 +111,16 @@ def build_entities(
             }
         )
     return entities
+
+
+def _oldest_first(renderer: Renderer, person_id: str) -> dict[str, list[str]]:
+    """Written values per field, oldest reservation first: a person who gains a second
+    phone keeps declaring the first one."""
+    rank = {key: i for i, key in enumerate(renderer.factory.registry.surrogate_order(person_id))}
+    return {
+        field_name: sorted(values, key=lambda v, f=field_name: rank.get((f, v), len(rank)))
+        for field_name, values in renderer.used.get(person_id, {}).items()
+    }
 
 
 def _drop_shared_originals(entities: list[dict[str, Any]]) -> None:

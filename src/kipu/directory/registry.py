@@ -202,6 +202,12 @@ class Registry:
             self.journal("reserve", {"person_id": person_id, "field": field})
             return value
 
+    def surrogate_order(self, person_id: str) -> list[tuple[str, str]]:
+        """(field, value) of a person's surrogates in the order they were reserved."""
+        return self.conn.execute(
+            "SELECT field, value FROM surrogates WHERE person_id=? ORDER BY rowid", (person_id,)
+        ).fetchall()
+
     def surrogate_values(self) -> list[tuple[str, str]]:
         return self.conn.execute("SELECT field, value FROM surrogates").fetchall()
 

@@ -12,8 +12,8 @@ from kipu.audit.texto import CONFUSABLES, RX_CONFUSABLE
 from kipu.detect.mention import IDENTIFIER_LABELS, Mention, resolve_overlaps
 from kipu.detect.names import HandleMatcher, KeptMatcher, NameIndex, ngrams, tokenize
 from kipu.detect.patterns import asks_for_cedula, digits_of, find_digit_runs, find_identifiers
+from kipu.detect.quasi import QuasiLexicon
 from kipu.directory.directory import EXCLUSIVE_TYPES, Directory, Person
-from kipu.directory.names import fold
 from kipu.directory.seed import norm_identifier
 
 ID_TYPES = {
@@ -69,10 +69,12 @@ class Detector:
         kept: KeptMatcher,
         handles: HandleMatcher | None = None,
         surrogates: set[str] | None = None,
+        quasi: QuasiLexicon | None = None,
     ) -> None:
         self.directory = directory
         self.index = index
         self.kept = kept
+        self.quasi = quasi or QuasiLexicon(directory.persons.values(), kept=kept.terms.values())
         self.handles = handles or HandleMatcher(directory.persons.values(), kept)
         self.surrogates = surrogates or set()
         self.extra: ExtraMentions | None = None
@@ -318,13 +320,8 @@ class Detector:
     def _quasi(self, surface: Surface, context: list[str]) -> list[Mention]:
         if not surface.free_text:
             return []
-        found: list[Mention] = []
-        folded = fold(surface.text)
-        for pid in context:
-            person = self.directory.persons.get(pid)
-            if person is not None:
-                found.extend(_quasi_for(person, surface.text, folded))
-        return found
+        persons = [self.directory.persons[p] for p in context if p in self.directory.persons]
+        return self.quasi.scan(surface.text, persons)
 
 
 def unconfuse(text: str) -> str:
@@ -345,48 +342,3 @@ def _choose(candidates: tuple[str, ...], nearby: list[str], context: list[str]) 
             if pid in candidates:
                 return pid
     return None
-
-
-def _quasi_for(person: Person, text: str, folded: str) -> list[Mention]:
-    attrs = person.attrs
-    found: list[Mention] = []
-    barrio = attrs.get("barrio", "")
-    if barrio:
-        for start, end in _word_spans(folded, fold(barrio)):
-            if text[start].isupper():
-                found.append(Mention(start, end, text[start:end], "QUASI_BARRIO", person.person_id))
-    for variant in occupation_variants(attrs.get("ocupacion", "")):
-        for start, end in _word_spans(folded, variant):
-            found.append(Mention(start, end, text[start:end], "QUASI_OCCUPATION", person.person_id))
-    year = attrs.get("vinculacion", "")[:4]
-    if year and found:
-        for start, end in _word_spans(folded, year):
-            found.append(Mention(start, end, text[start:end], "QUASI_YEAR", person.person_id))
-    labels = {m.label for m in found}
-    if len(labels) < 2:
-        found = [m for m in found if m.label != "QUASI_YEAR"]
-    return found
-
-
-def occupation_variants(occupation: str) -> list[str]:
-    occ = fold(occupation).strip()
-    if not occ:
-        return []
-    head, _, rest = occ.partition(" ")
-    swaps = {head}
-    if head.endswith("ora"):
-        swaps.add(head[:-1])
-    elif head.endswith("or"):
-        swaps.add(head + "a")
-    elif head.endswith("a") and not head.endswith(("ista", "euta")):
-        swaps.add(head[:-1] + "o")
-    elif head.endswith("o"):
-        swaps.add(head[:-1] + "a")
-    return [f"{h} {rest}".strip() for h in sorted(swaps)]
-
-
-def _word_spans(folded: str, needle: str) -> list[tuple[int, int]]:
-    if not needle:
-        return []
-    pattern = re.compile(rf"(?<![a-z0-9]){re.escape(needle)}(?![a-z0-9])")
-    return [(m.start(), m.end()) for m in pattern.finditer(folded)]

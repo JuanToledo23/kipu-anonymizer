@@ -34,7 +34,7 @@ PRIORITY = {
     "QUASI_AGE": 4,
 }
 # Generalized in place (the mention carries its replacement), no person needed.
-GENERALIZED_LABELS = ("QUASI_LLM", "QUASI_AGE")
+GENERALIZED_LABELS = ("QUASI_BARRIO", "QUASI_OCCUPATION", "QUASI_YEAR", "QUASI_LLM", "QUASI_AGE")
 NAME_KIND_PRIORITY = {
     "full": 0,
     "short": 1,

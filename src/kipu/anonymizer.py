@@ -9,6 +9,7 @@ from kipu.detect.engine import Detector, Group, Surface
 from kipu.detect.mention import IDENTIFIER_LABELS, Mention
 from kipu.detect.names import TOKEN, KeptMatcher, NameIndex
 from kipu.detect.patterns import find_plates
+from kipu.detect.quasi import QuasiLexicon
 from kipu.directory.directory import Directory
 from kipu.directory.names import fold
 from kipu.directory.registry import Registry
@@ -60,7 +61,11 @@ class Anonymizer:
         self.index = NameIndex(directory.persons.values())
         self.kept = KeptMatcher()
         surrogates = _surrogate_values(registry) if live else None
-        self.detector = Detector(directory, self.index, self.kept, surrogates=surrogates)
+        self.sectors = sectors or {}
+        quasi = QuasiLexicon(directory.persons.values(), self.sectors, self.kept.terms.values())
+        self.detector = Detector(
+            directory, self.index, self.kept, surrogates=surrogates, quasi=quasi
+        )
         forbidden_names, forbidden_tokens, self.observed = _forbidden(directory)
         self.factory = SurrogateFactory(
             registry,
@@ -69,8 +74,7 @@ class Anonymizer:
             forbidden_tokens,
             lambda field, value: _is_real(directory, self.observed, field, value),
         )
-        self.sectors = sectors or {}
-        self.renderer = Renderer(self.factory, directory, self.sectors)
+        self.renderer = Renderer(self.factory, directory)
         self.ledger = EntityLedger()
         self.spans: dict[tuple[str, str], list[Mention]] = {}
 

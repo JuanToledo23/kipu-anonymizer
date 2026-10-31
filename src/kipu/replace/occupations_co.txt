@@ -1,0 +1,187 @@
+# Common Colombian occupations and their sector. One occupation per line: its gendered forms
+# separated by commas (plurals are derived), then `;` and the sector. Words that are also
+# everyday nouns in support chats (asesor, agente, cajero, guía, piloto,
+# música, química, maestro, secretaria, mensajero) and company nouns (distribuidora,
+# transportadora) are left out.
+médico, médica; profesional de la salud
+médico general, médica general; profesional de la salud
+cirujano, cirujana; profesional de la salud
+pediatra; profesional de la salud
+ginecólogo, ginecóloga; profesional de la salud
+dermatólogo, dermatóloga; profesional de la salud
+psiquiatra; profesional de la salud
+radiólogo, radióloga; profesional de la salud
+enfermero, enfermera; profesional de la salud
+auxiliar de enfermería; profesional de la salud
+jefe de enfermería; profesional de la salud
+nutricionista; profesional de la salud
+optómetra; profesional de la salud
+bacteriólogo, bacterióloga; profesional de la salud
+farmaceuta; profesional de la salud
+regente de farmacia; profesional de la salud
+terapeuta ocupacional; profesional de la salud
+terapeuta respiratorio, terapeuta respiratoria; profesional de la salud
+fonoaudiólogo, fonoaudióloga; profesional de la salud
+paramédico, paramédica; profesional de la salud
+instrumentador quirúrgico, instrumentadora quirúrgica; profesional de la salud
+odontólogo, odontóloga; profesional de la salud
+psicólogo, psicóloga; profesional de la salud
+fisioterapeuta; profesional de la salud
+veterinario, veterinaria; profesional de la salud
+docente; profesional de la educación
+profesor, profesora; profesional de la educación
+rector, rectora; profesional de la educación
+licenciado, licenciada; profesional de la educación
+tutor, tutora; profesional de la educación
+bibliotecario, bibliotecaria; profesional de la educación
+investigador, investigadora; profesional de la educación
+abogado, abogada; profesional del sector jurídico
+juez, jueza; profesional del sector jurídico
+notario, notaria; profesional del sector jurídico
+litigante; profesional del sector jurídico
+asesor jurídico, asesora jurídica; profesional del sector jurídico
+contador, contadora; profesional de finanzas
+contador público, contadora pública; profesional de finanzas
+auxiliar contable; profesional de finanzas
+economista; profesional de finanzas
+revisor fiscal, revisora fiscal; profesional de finanzas
+tesorero, tesorera; profesional de finanzas
+auditor, auditora; profesional de finanzas
+actuario, actuaria; profesional de finanzas
+analista financiero, analista financiera; profesional de finanzas
+asesor financiero, asesora financiera; profesional de finanzas
+corredor de seguros, corredora de seguros; profesional de finanzas
+arquitecto, arquitecta; profesional de la construcción
+ingeniero civil, ingeniera civil; profesional de la construcción
+ingeniero eléctrico, ingeniera eléctrica; profesional de la construcción
+maestro de obra; profesional de la construcción
+obrero de construcción, obrera de construcción; profesional de la construcción
+albañil; profesional de la construcción
+electricista; profesional de la construcción
+plomero, plomera; profesional de la construcción
+fontanero, fontanera; profesional de la construcción
+soldador, soldadora; profesional de la construcción
+carpintero, carpintera; profesional de la construcción
+ebanista; profesional de la construcción
+cerrajero, cerrajera; profesional de la construcción
+topógrafo, topógrafa; profesional de la construcción
+ingeniero de sistemas, ingeniera de sistemas; profesional de tecnología
+ingeniero de software, ingeniera de software; profesional de tecnología
+ingeniero electrónico, ingeniera electrónica; profesional de tecnología
+desarrollador, desarrolladora; profesional de tecnología
+programador, programadora; profesional de tecnología
+técnico en sistemas, técnica en sistemas; profesional de tecnología
+científico de datos, científica de datos; profesional de tecnología
+diseñador web, diseñadora web; profesional de tecnología
+comerciante; profesional del comercio
+vendedor, vendedora; profesional del comercio
+vendedor ambulante, vendedora ambulante; profesional del comercio
+tendero, tendera; profesional del comercio
+mercaderista; profesional del comercio
+impulsador, impulsadora; profesional del comercio
+representante de ventas; profesional del comercio
+asesor comercial, asesora comercial; profesional del comercio
+microempresario, microempresaria; profesional del comercio
+empresario, empresaria; profesional del comercio
+emprendedor, emprendedora; profesional del comercio
+negociante; profesional del comercio
+conductor, conductora; profesional del transporte
+conductor de plataforma, conductora de plataforma; profesional del transporte
+taxista; profesional del transporte
+camionero, camionera; profesional del transporte
+domiciliario, domiciliaria; profesional del transporte
+mecánico, mecánica; profesional del transporte
+piloto comercial; profesional del transporte
+piloto de avión; profesional del transporte
+auxiliar de vuelo; profesional del transporte
+azafata; profesional del transporte
+controlador aéreo, controladora aérea; profesional del transporte
+chef; profesional de gastronomía
+cocinero, cocinera; profesional de gastronomía
+panadero, panadera; profesional de gastronomía
+pastelero, pastelera; profesional de gastronomía
+mesero, mesera; profesional de gastronomía
+barista; profesional de gastronomía
+bartender; profesional de gastronomía
+diseñador gráfico, diseñadora gráfica; profesional de las industrias creativas
+diseñador de modas, diseñadora de modas; profesional de las industrias creativas
+diseñador industrial, diseñadora industrial; profesional de las industrias creativas
+fotógrafo, fotógrafa; profesional de las industrias creativas
+músico; profesional de las industrias creativas
+artista; profesional de las industrias creativas
+actor, actriz; profesional de las industrias creativas
+ilustrador, ilustradora; profesional de las industrias creativas
+escritor, escritora; profesional de las industrias creativas
+productor audiovisual, productora audiovisual; profesional de las industrias creativas
+publicista; profesional de las industrias creativas
+tatuador, tatuadora; profesional de las industrias creativas
+periodista; profesional de medios
+comunicador social, comunicadora social; profesional de medios
+community manager; profesional de medios
+locutor, locutora; profesional de medios
+presentador, presentadora; profesional de medios
+creador de contenido, creadora de contenido; profesional de medios
+influenciador, influenciadora; profesional de medios
+influencer; profesional de medios
+youtuber; profesional de medios
+estilista; profesional del cuidado personal
+peluquero, peluquera; profesional del cuidado personal
+barbero, barbera; profesional del cuidado personal
+manicurista; profesional del cuidado personal
+esteticista; profesional del cuidado personal
+cosmetólogo, cosmetóloga; profesional del cuidado personal
+maquillador, maquilladora; profesional del cuidado personal
+masajista; profesional del cuidado personal
+entrenador personal, entrenadora personal; profesional del cuidado personal
+administrador, administradora; profesional de servicios
+administrador de empresas, administradora de empresas; profesional de servicios
+recepcionista; profesional de servicios
+asistente administrativo, asistente administrativa; profesional de servicios
+auxiliar administrativo, auxiliar administrativa; profesional de servicios
+empleado doméstico, empleada doméstica; profesional de servicios
+conserje; profesional de servicios
+niñero, niñera; profesional de servicios
+jardinero, jardinera; profesional de servicios
+cuidador, cuidadora; profesional de servicios
+traductor, traductora; profesional de servicios
+intérprete; profesional de servicios
+consultor, consultora; profesional de servicios
+vigilante; profesional de seguridad
+celador, celadora; profesional de seguridad
+guarda de seguridad; profesional de seguridad
+escolta; profesional de seguridad
+bombero, bombera; profesional de seguridad
+agricultor, agricultora; profesional del agro
+campesino, campesina; profesional del agro
+ganadero, ganadera; profesional del agro
+caficultor, caficultora; profesional del agro
+floricultor, floricultora; profesional del agro
+agrónomo, agrónoma; profesional del agro
+zootecnista; profesional del agro
+pescador, pescadora; profesional del agro
+minero, minera; profesional del agro
+operario, operaria; profesional de la industria
+ingeniero industrial, ingeniera industrial; profesional de la industria
+ingeniero mecánico, ingeniera mecánica; profesional de la industria
+ingeniero químico, ingeniera química; profesional de la industria
+químico; profesional de la industria
+modista; profesional de la industria
+costurero, costurera; profesional de la industria
+confeccionista; profesional de la industria
+zapatero, zapatera; profesional de la industria
+joyero, joyera; profesional de la industria
+tornero, tornera; profesional de la industria
+funcionario público, funcionaria pública; servidor público
+servidor público, servidora pública; servidor público
+estudiante de derecho; estudiante universitario
+estudiante de medicina; estudiante universitario
+estudiante de enfermería; estudiante universitario
+estudiante de ingeniería; estudiante universitario
+estudiante de administración; estudiante universitario
+estudiante de psicología; estudiante universitario
+estudiante de contaduría; estudiante universitario
+estudiante de arquitectura; estudiante universitario
+estudiante de diseño; estudiante universitario
+estudiante de economía; estudiante universitario
+estudiante de comunicación; estudiante universitario
+estudiante universitario, estudiante universitaria; estudiante universitario

@@ -7,9 +7,7 @@ from kipu.detect.mention import GENERALIZED_LABELS, Mention
 from kipu.directory.directory import Directory, Person
 from kipu.directory.names import NameParts, fold, split_name, strip_accents
 from kipu.pseudo.surrogates import SurrogateFactory, SurrogateName
-from kipu.replace.generalize import sector_for
 
-GENERALIZED_YEAR = "hace unos años"
 WORD_SPLIT = re.compile(r"[\s_.\-]+")
 
 
@@ -88,13 +86,9 @@ def spell_email(email: str, english: bool) -> str:
 class Renderer:
     """Renders surrogates for mentions and remembers which pseudonym values were written."""
 
-    def __init__(
-        self, factory: SurrogateFactory, directory: Directory, sectors: dict[str, str] | None = None
-    ) -> None:
-        """`sectors`: extra folded occupation → sector entries (classified by the LLM layer)."""
+    def __init__(self, factory: SurrogateFactory, directory: Directory) -> None:
         self.factory = factory
         self.directory = directory
-        self.sectors = sectors or {}
         self.used: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
 
     def _note(self, person_id: str, field: str, value: str) -> str:
@@ -210,15 +204,6 @@ class Renderer:
     def _render_account(self, m: Mention, person: Person) -> str:
         value = fit_alnum(m.text, self.factory.account(person, m.value))
         return self._note(person.person_id, "account", value)
-
-    def _render_quasi_barrio(self, m: Mention, person: Person) -> str | None:
-        return person.attrs.get("ciudad") or None
-
-    def _render_quasi_occupation(self, m: Mention, person: Person) -> str | None:
-        return sector_for(person.attrs.get("ocupacion", ""), self.sectors) or None
-
-    def _render_quasi_year(self, m: Mention, person: Person) -> str:
-        return GENERALIZED_YEAR
 
 
 def _separator(span: str) -> str:

@@ -78,7 +78,7 @@ def seeds_from_tables(tables: list[TableRecord]) -> list[PersonSeed]:
             seed.add("email", c.get("correo", ""))
             seed.add("phone", c.get("celular", ""))
             seed.add("birth_iso", c.get("fecha_nacimiento", ""))
-            seed.attrs = {"ciudad": c.get("ciudad", ""), "reporta_a": c.get("reporta_a", "")}
+            seed.attrs = {k: c.get(k, "") for k in ("ciudad", "reporta_a", "cargo", "ingreso")}
             seeds.append(seed)
         elif record.table == "pqrs":
             seed = PersonSeed(record.id, "pqr_link", "")

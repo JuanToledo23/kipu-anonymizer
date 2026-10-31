@@ -59,6 +59,9 @@
   then thread participants, then the owners of identifiers elsewhere in the thread, then persons
   named unambiguously there; with none of those, the strong model judges on evidence in the text
   (LLM runs), else source decides (employee in `empleados` and docs, client in client tables).
+- `empleados.reporta_a` holds a name, not an id: it resolves to the one employee with that full
+  or given + first surname name, who joins the row's context, so the cell carries the manager's
+  pseudonym.
 - `person_id` and every surrogate live in `$DATA_DIR/registry.sqlite`; surrogates are seeded by
   HMAC(secret, person_id|field|original|counter) and reserved with UNIQUE constraints, and they
   never reproduce a real name or identifier value.

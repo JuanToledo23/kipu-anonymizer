@@ -46,11 +46,13 @@ class Surface:
 
 @dataclass
 class Group:
-    """Records analysed together, with the persons known to take part in them."""
+    """Records analysed together, with the persons known to take part in them (`related`:
+    persons a row points to, such as an employee's manager)."""
 
     surfaces: list[Surface]
     authors: dict[str, str | None] = field(default_factory=dict)
     owner: str | None = None
+    related: list[str] = field(default_factory=list)
     kind: str = "chat"
     prefer: str = ""
     scope: str = ""
@@ -142,6 +144,7 @@ class Detector:
         ordered: list[str] = [p for p in group.authors.values() if p]
         if group.owner:
             ordered.append(group.owner)
+        ordered += group.related
         named: list[str] = []
         for mentions in raw.values():
             for m in mentions:

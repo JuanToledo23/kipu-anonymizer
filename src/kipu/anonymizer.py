@@ -195,8 +195,20 @@ class Anonymizer:
             if v and k not in UNTOUCHED_COLUMNS and k not in GENERALIZED_COLUMNS
         ]
         prefer = "employee" if r.table == "empleados" else "client"
+        manager = (
+            self.directory.employee_by_name(r.columns.get("reporta_a", ""))
+            if r.table == "empleados"
+            else None
+        )
         replaced = self._apply(
-            Group(surfaces, owner=owner, kind="table", prefer=prefer, scope=r.id)
+            Group(
+                surfaces,
+                owner=owner,
+                related=[manager] if manager else [],
+                kind="table",
+                prefer=prefer,
+                scope=r.id,
+            )
         )
         columns = {}
         for key, value in r.columns.items():

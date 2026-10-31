@@ -1,4 +1,4 @@
-from conftest import client_seed
+from conftest import client_seed, employee_seed
 from kipu.directory.directory import Directory
 from kipu.directory.seed import PersonSeed
 
@@ -117,3 +117,20 @@ def test_no_person_is_created_without_an_identifier_of_its_own(registry) -> None
     )
     assert len(d.created) == 1
     assert d.owner_of("cliente_id", "PG-1") == d.owner_of("cliente_id", "CL-1")
+
+
+def test_manager_by_full_or_two_word_name(registry) -> None:
+    d = Directory(registry)
+    d.add_seeds(
+        [
+            employee_seed("KP-1", "Luz Carmen Naranjo Ríos", "lnaranjo@kipupay.co"),
+            employee_seed("KP-2", "Pedro Gómez Ruiz", "pgomez@kipupay.co"),
+            employee_seed("KP-3", "Pedro Gómez Mora", "pgomezm@kipupay.co"),
+            client_seed("CL-1", "Luz Naranjo Peña", "111111", "luz@gmail.com", "3001111111"),
+        ],
+        {},
+    )
+    assert d.employee_by_name("Luz Naranjo") == d.owner_of("kp_id", "KP-1")
+    assert d.employee_by_name("Luz Carmen Naranjo Ríos") == d.owner_of("kp_id", "KP-1")
+    assert d.employee_by_name("Pedro Gómez") is None
+    assert d.employee_by_name("") is None

@@ -152,6 +152,19 @@ class Directory:
         owner = self.by_id.get((id_type, value)) or self.registry.owner(id_type, value)
         return owner if owner in self.persons else None
 
+    def employee_by_name(self, name: str) -> str | None:
+        """The one employee of this run called `name` in full or short form; `reporta_a`
+        names managers this way ("Nombre Apellido"), not by id."""
+        key = " ".join(fold(name).split())
+        if not key:
+            return None
+        hits = [
+            p.person_id
+            for p in self.persons.values()
+            if p.kind == "employee" and key in _name_forms(p.name)
+        ]
+        return hits[0] if len(hits) == 1 else None
+
     def external_person(self, name: str, key: str, gender: str = "") -> Person:
         """A person found only in text (no master row). `key` makes homonyms distinct."""
         tokens = re.findall(r"[a-z0-9]+", fold(name))
@@ -187,6 +200,11 @@ class Directory:
             if id_type != "external":
                 person.identifiers.setdefault(id_type, set()).add(value_raw)
         return directory
+
+
+def _name_forms(name: NameParts) -> set[str]:
+    forms = {name.full, name.short, " ".join(name.given[:1] + name.surnames[:1])}
+    return {" ".join(fold(f).split()) for f in forms}
 
 
 def _person_from_row(row: dict[str, Any]) -> Person:

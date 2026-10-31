@@ -153,3 +153,5 @@ def test_empleados_row_cargo_family_and_manager_pseudonym(registry) -> None:
     out = [r["columns"] for r in anonymizer.tables(tables)]
     assert [c["cargo"] for c in out] == ["Líder", "Analista"]
     assert [(c["ciudad"], c["ingreso"]) for c in out] == [(r["ciudad"], r["ingreso"]) for r in rows]
+    manager = anonymizer.factory.name(directory.persons[directory.employee_by_name("Gloria Ríos")])
+    assert out[1]["reporta_a"] == manager.short

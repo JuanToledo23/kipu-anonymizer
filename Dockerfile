@@ -16,10 +16,9 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 COPY src ./src
-COPY run.sh ./
+COPY run.sh docker-entrypoint.sh ./
 RUN uv sync --frozen --no-dev
 
-USER app
 VOLUME /data
 EXPOSE 9000
-CMD ["./run.sh"]
+ENTRYPOINT ["./docker-entrypoint.sh"]

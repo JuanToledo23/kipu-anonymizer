@@ -6,3 +6,6 @@ __pycache__/
 node_modules/
 preview.png
 *.sqlite
+.ruff_cache/
+.pytest_cache/
+.DS_Store

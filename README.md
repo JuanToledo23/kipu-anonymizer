@@ -81,6 +81,19 @@ checks structure against `record_index.json` (ids once, columns, metadata keys, 
 prints a table and exits 1 on any real hit. Categorical columns (`tipo_doc`, `barrio`,
 `ocupacion`, `notas`) and plain amounts are not counted.
 
+## Watching the sources
+
+The sources API grows at some point without notice. `scripts/watch_sources.py` (not part of the
+service) polls `GET /record_index` every 2 minutes with `If-None-Match`, prints the id count per
+source, and on any change prints a `!!!!! SOURCES CHANGED !!!!!` line and writes
+`data/sources_changed.flag` with the old and new counts. Its last ETag and counts persist in
+`data/sources_watch.json`; the first baseline is `data/fuentes/record_index.json`.
+
+```bash
+uv run python scripts/watch_sources.py            # FUENTES_URL / FUENTES_TOKEN from .env
+uv run python scripts/watch_sources.py --once     # single poll
+```
+
 ## Architecture
 
 1. **Ingest**: `HttpSource`/`DirSource` → normalized chat, doc and table records.

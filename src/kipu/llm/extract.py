@@ -89,7 +89,9 @@ Kipu Pay), third_party (cualquier otra persona) o unknown.
 - Si no hay nada, devuelve {"mentions": []}."""
 
 EXTRACT_SYSTEM = f"""Eres un detector de datos personales en textos en español de Colombia: \
-chats de soporte, documentos internos y notas de tablas de Kipu Pay, una billetera digital.
+chats de soporte, documentos internos y notas de tablas de Kipu Pay, una billetera digital. \
+Algunos documentos (contratos, avisos legales de la compra de cartera de Págalo) están en \
+inglés: extrae igual sus nombres, firmantes y datos personales, con las mismas etiquetas.
 
 {SECURITY}
 

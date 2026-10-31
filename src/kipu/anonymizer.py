@@ -203,6 +203,9 @@ class Anonymizer:
             columns[key] = replaced.get((r.id, f"columns.{key}"), value)
         if owner and r.table == "clientes":
             self._generalize_row(owner, columns)
+        if owner and r.table == "empleados" and columns.get("cargo"):
+            # Cargo → its free-text family: with ciudad + ingreso it singles the employee out.
+            columns["cargo"] = self.detector.quasi.whole_term(columns["cargo"])
         return {"id": r.id, "table": r.table, "columns": columns}
 
     def _row_owner(self, r: TableRecord) -> str | None:

@@ -26,6 +26,10 @@
   generalized to a sector and the barrio swapped for another barrio of the same city (fixed per
   person). In free text, for the persons in context: barrio → city, occupation → sector, and the
   joining year → "hace unos años" when it co-occurs with another component.
+- **Employee cargo**: in `empleados` the `cargo` cell gets exactly what free text writes for it
+  (its family: "Analista de Fraude" → "Analista", CEO/CTO → "directivo"); `ciudad`, `ingreso`
+  and `reporta_a` stay as org structure. With the full cargo, the row plus any record naming
+  the employee's city and year singled them out (the indirect test joins records to the row).
 
 ## Kept on purpose and why
 

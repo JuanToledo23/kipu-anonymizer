@@ -134,6 +134,16 @@ class QuasiLexicon:
         found += _years(text, folded) + _ages(text, folded)
         return found + _own_years(text, folded, context, found)
 
+    def whole_term(self, term: str) -> str:
+        """What free text would write for a cargo or occupation standing alone (a table cell);
+        the term itself when free text keeps it."""
+        found = [
+            m
+            for m in self.scan(term, [])
+            if m.label == "QUASI_OCCUPATION" and (m.start, m.end) == (0, len(term))
+        ]
+        return found[0].value if found else term
+
     def _occupation(self, text: str, start: int, end: int) -> Mention:
         sector, is_plural = self.occupations[fold(text[start:end])]
         value = plural_phrase(sector) if is_plural else sector

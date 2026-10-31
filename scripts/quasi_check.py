@@ -8,9 +8,9 @@ administrador, vive en Castilla"). Records linked to the person (their entity's 
 raw record naming them or carrying an identifier) are marked `linked`. A record where all
 three components co-occur is a TRIPLE (exit 1); records with two are listed for review.
 
-The empleados master row keeps cargo, ciudad and ingreso (org structure), so with the join
-every employee record has all three; employees are judged on the record alone, and the
-joined count is printed apart.
+The empleados master row keeps ciudad and ingreso (org structure) but writes cargo as its
+family ("Analista de Fraude" → "Analista"), so once generalized the joined row no longer
+supplies the cargo: an employee record counts it only if the record itself carries it.
 
 Usage:
   uv run python scripts/quasi_check.py <output_dir> --raw <data/raw/<run>>
@@ -106,7 +106,7 @@ def main() -> int:
     rows = masters(corpus.tables)
     shorts = Counter(split_name(m.name).short for m in rows)
     candidates = {rid for rid in out if not rid.startswith(MASTER_PREFIXES)}
-    triples, pairs, joined_employee_triples = [], [], 0
+    triples, pairs = [], []
     for m in rows:
         short = split_name(m.name).short
         forms = [m.name, *m.lookup] + ([short] if shorts[short] == 1 else [])
@@ -117,12 +117,7 @@ def main() -> int:
             alone = present(out[rid], m.components)
             if len(alone) < 2 and rid not in linked:
                 continue
-            joined = present(out[rid] + "\n" + master_text, m.components)
-            if m.kind == "employee":
-                joined_employee_triples += len(joined) == 3
-                judged = alone
-            else:
-                judged = joined
+            judged = present(out[rid] + "\n" + master_text, m.components)
             tag = "linked" if rid in linked else "unlinked"
             line = f"{m.record_id} {rid} {'+'.join(judged)} ({tag})"
             if len(judged) == 3:
@@ -133,10 +128,10 @@ def main() -> int:
         print("PAIR", line)
     for line in triples:
         print("TRIPLE", line)
+    kinds = Counter(line.split()[0].split(":")[0] for line in triples)
     print(
         f"persons: {len(rows)}; records with 2 components: {len(pairs)}; "
-        f"TRIPLES: {len(triples)}; employee records with 3 when joined to the "
-        f"intact empleados row: {joined_employee_triples}"
+        f"TRIPLES: {len(triples)} (clientes {kinds['clientes']}, empleados {kinds['empleados']})"
     )
     return 1 if triples else 0
 

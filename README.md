@@ -87,7 +87,7 @@ checks structure against `record_index.json` (ids once, columns, metadata keys, 
 prints a table and exits 1 on any real hit. Categorical columns (`tipo_doc`, `barrio`,
 `ocupacion`, `notas`) and plain amounts are not counted.
 
-`scripts/quasi_check.py <out> --raw <data/raw/<run>>` lists, per person with a master row, the output records where their barrio/ocupación/año (cargo/ciudad/ingreso for employees) still co-occur; exits 1 on any record with all three.
+`scripts/quasi_check.py <out> --raw <data/raw/<run>>` lists, per person with a master row, the output records where their barrio/ocupación/año (cargo/ciudad/ingreso for employees) still co-occur, each record joined to the person's output master row; exits 1 on any record with all three.
 
 `scripts/identity_audit.py <out> --raw <data/raw/<run>> --registry <registry.sqlite> [--baseline <entities.json>]` audits identity (same-name persons, unlinked chat users, missed records, forms declared by two entities, pseudonyms changed since a baseline) on a copy of the registry.
 

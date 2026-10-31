@@ -1,8 +1,12 @@
 import pytest
 
+from conftest import SECRET
+from kipu.anonymizer import Anonymizer
 from kipu.detect.quasi import QuasiLexicon
-from kipu.directory.directory import Person
+from kipu.directory.directory import Directory, Person
 from kipu.directory.names import split_name
+from kipu.directory.seed import seeds_from_tables
+from kipu.ingest.records import TableRecord
 from kipu.replace.generalize import inflections, plural_phrase
 from kipu.replace.render import apply_mentions
 
@@ -118,3 +122,34 @@ def test_front_matter_keys_are_kept(lexicon: QuasiLexicon) -> None:
         generalize(lexicon, text)
         == "---\nabogada: x@y.co\n---\nLa profesional del sector jurídico revisó."
     )
+
+
+@pytest.mark.parametrize(
+    ("cargo", "expected"),
+    [
+        ("CEO", "directivo"),
+        ("Analista de Fraude", "Analista"),
+        ("Contador", "Profesional de finanzas"),
+        ("Agente de Soporte", "Agente de Soporte"),  # Cali 2024 is shared: kept, as in text
+    ],
+)
+def test_a_cargo_cell_gets_what_free_text_writes(
+    lexicon: QuasiLexicon, cargo: str, expected: str
+) -> None:
+    assert lexicon.whole_term(cargo) == expected
+
+
+def test_empleados_row_cargo_family_and_manager_pseudonym(registry) -> None:
+    directory = Directory(registry)
+    rows = [
+        {"id": "KP-001", "nombre": "Gloria Ríos Henao", "cargo": "Líder de Soporte",
+         "ciudad": "Medellín", "ingreso": "2020-03-01", "reporta_a": ""},
+        {"id": "KP-191", "nombre": "Mateo Vargas Cruz", "cargo": "Analista de Riesgo",
+         "ciudad": "Cali", "ingreso": "2026-10-15", "reporta_a": "Gloria Ríos"},
+    ]  # fmt: skip
+    tables = [TableRecord(id=f"empleados:{r['id']}", table="empleados", columns=r) for r in rows]
+    directory.add_seeds(seeds_from_tables(tables), {})
+    anonymizer = Anonymizer(registry, directory, SECRET)
+    out = [r["columns"] for r in anonymizer.tables(tables)]
+    assert [c["cargo"] for c in out] == ["Líder", "Analista"]
+    assert [(c["ciudad"], c["ingreso"]) for c in out] == [(r["ciudad"], r["ingreso"]) for r in rows]

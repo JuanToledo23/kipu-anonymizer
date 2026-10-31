@@ -30,6 +30,8 @@ LLM layer flags (`.env`; the layer needs `OPENROUTER_API_KEY`, `ANTHROPIC_API_KE
 
 Every route is served at both `/v1/...` and `/...`. With `ENTRYPOINT_TOKEN` set, all routes
 require `Authorization: Bearer <token>` except `GET /health` (no secrets in it).
+`GET /health` and `POST /anonymize` allow CORS from any origin (methods GET, POST, OPTIONS;
+header `Content-Type`) for the public demo page; the other routes send no CORS headers.
 
 Real runs use `DATA_DIR=data`; the sample always uses `DATA_DIR=data/sample_run` so its persons
 never enter the real registry.

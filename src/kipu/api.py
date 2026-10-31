@@ -11,8 +11,10 @@ from typing import Any, Literal
 import httpx
 import orjson
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from kipu import __version__
 from kipu.anonymizer import Anonymizer
@@ -35,11 +37,29 @@ RECORD_MODELS: dict[str, Any] = {
 }
 MEDIA_TYPES = {".jsonl": "application/x-ndjson", ".json": "application/json"}
 MAX_JOBS = 200
+CORS_PATHS = frozenset({"/health", "/v1/health", "/anonymize", "/v1/anonymize"})
 
 
 class OrjsonResponse(JSONResponse):
     def render(self, content: Any) -> bytes:
         return orjson.dumps(content)
+
+
+class PathCORS:
+    """CORS for the public demo page on `CORS_PATHS` only; every other route stays same-origin."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+        self.cors = CORSMiddleware(
+            app,
+            allow_origins=["*"],
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=["Content-Type"],
+        )
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        wanted = scope["type"] == "http" and scope["path"] in CORS_PATHS
+        await (self.cors if wanted else self.app)(scope, receive, send)
 
 
 class RunRequest(BaseModel):
@@ -243,6 +263,7 @@ def create_app(
     jobs = JobManager(settings, transport)
     anonymizer = AnonymizeService(settings, llm_client)
     app = FastAPI(title="Kipu Pay anonymizer", default_response_class=OrjsonResponse)
+    app.add_middleware(PathCORS)
 
     def authorize(authorization: str | None = Header(default=None)) -> None:
         expected = settings.entrypoint_token

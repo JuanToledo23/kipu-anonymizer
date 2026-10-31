@@ -6,6 +6,7 @@ The service runs on Fly.io as app `kipu-anonymizer` (org `juantoledo`), one alwa
 - Public URL: `https://kipu-anonymizer.fly.dev`; portal ENTRYPOINT: `https://kipu-anonymizer.fly.dev/v1`
 - Every route is also served at the root (`/health`, `/anonymize`, ...). `GET /health` needs no token;
   everything else requires `Authorization: Bearer $ENTRYPOINT_TOKEN`.
+- `/health` and `/anonymize` answer CORS from any origin (demo page); no other route does.
 - `mia` is no longer a Fly region; `dfw` is the closest one (and what Fly maps `mia` to).
 
 ## Rule

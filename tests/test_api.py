@@ -80,3 +80,22 @@ def test_settings_ignore_surrounding_whitespace(monkeypatch) -> None:
     monkeypatch.setenv("ENTRYPOINT_TOKEN", " tok ")
     settings = config.load_settings()
     assert settings.pseudonym_secret == "abc" and settings.entrypoint_token == "tok"
+
+
+def test_cors_preflight_only_on_public_demo_routes(tmp_path: Path) -> None:
+    client = TestClient(create_app(settings(tmp_path, token="abc")))
+    preflight = {
+        "Origin": "https://demo.example",
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "Content-Type",
+    }
+    for path in ("/v1/anonymize", "/anonymize", "/v1/health"):
+        ok = client.options(path, headers=preflight)
+        assert ok.status_code == 200
+        assert ok.headers["access-control-allow-origin"] == "*"
+        assert "POST" in ok.headers["access-control-allow-methods"]
+        assert "content-type" in ok.headers["access-control-allow-headers"].lower()
+    health = client.get("/v1/health", headers={"Origin": "https://demo.example"})
+    assert health.headers["access-control-allow-origin"] == "*"
+    other = client.options("/v1/run", headers=preflight)
+    assert "access-control-allow-origin" not in other.headers

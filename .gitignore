@@ -9,3 +9,4 @@ preview.png
 .ruff_cache/
 .pytest_cache/
 .DS_Store
+INVESTIGATION_redteam.md

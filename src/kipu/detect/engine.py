@@ -11,7 +11,7 @@ from kipu.audit.texto import CONFUSABLES, RX_CONFUSABLE
 from kipu.detect.mention import IDENTIFIER_LABELS, Mention, resolve_overlaps
 from kipu.detect.names import HandleMatcher, KeptMatcher, NameIndex, ngrams, tokenize
 from kipu.detect.patterns import asks_for_cedula, digits_of, find_digit_runs, find_identifiers
-from kipu.directory.directory import Directory, Person
+from kipu.directory.directory import EXCLUSIVE_TYPES, Directory, Person
 from kipu.directory.names import fold
 from kipu.directory.seed import norm_identifier
 
@@ -28,6 +28,9 @@ ID_TYPES = {
 RECORD_KEY = re.compile(r"\b(CL-\d{4,6}|KP-\d{3}|PQR-\d{4}-\d{4})\b")
 RECORD_KEY_TYPES = {"CL-": "cliente_id", "KP-": "kp_id", "PQR": "radicado"}
 STRONG_NAME_KINDS = ("full", "short", "handle")
+LINKING_KINDS = ("full", "short", "external")
+MAX_LINK_GAP = 40
+SENTENCE_END = re.compile(r"[!?\n]|\.\s+[A-ZÁÉÍÓÚÑ]")
 WEAK_NAME_KINDS = ("first", "surname")
 
 
@@ -219,7 +222,10 @@ class Detector:
             return m
         id_type = ID_TYPES[m.label]
         owner = self.directory.owner_of(id_type, m.value)
-        if not owner:
+        named = None if owner else self._named_before(m, surface.text, owned)
+        if named is not None:
+            owner = self._link_to_name(m, id_type, named, owned, surface.record_id)
+        elif not owner:
             owner = self._attribute(m, surface, group, context, owned)
             person = (
                 self.directory.persons.get(owner)
@@ -231,6 +237,45 @@ class Detector:
             owner = person.person_id if person else None
         return m.with_person(owner)
 
+    def _named_before(self, m: Mention, text: str, owned: list[Mention]) -> int | None:
+        """Index in `owned` of a person name just before a new identifier, in the same sentence
+        ("Soy X, CC n", "X (cel n)", "me llamo X y mi cédula es n")."""
+        if m.label == "HANDLE":
+            return None
+        for i in range(len(owned) - 1, -1, -1):
+            name = owned[i]
+            if name.end > m.start or name.label != "NAME":
+                continue
+            if not name.person_id or name.kind not in LINKING_KINDS:
+                return None
+            gap = text[name.end : m.start]
+            if len(gap) <= MAX_LINK_GAP and not SENTENCE_END.search(gap):
+                return i
+            return None
+        return None
+
+    def _link_to_name(
+        self, m: Mention, id_type: str, index: int, owned: list[Mention], record_id: str
+    ) -> str:
+        """The named person owns the identifier, unless it contradicts one they already have
+        (another cédula): then the name belongs to a homonym, a new person."""
+        name = owned[index]
+        person = self.directory.persons[name.person_id]
+        if self._contradicts(person, id_type, m.value):
+            person = self.directory.external_person(name.text, f"{id_type}:{m.value}")
+            owned[index] = name.with_person(person.person_id)
+        if not self.directory.attach(person, id_type, m.value, record_id):
+            return self.directory.external_person("", f"{id_type}:{m.value}").person_id
+        return person.person_id
+
+    def _contradicts(self, person: Person, id_type: str, raw: str) -> bool:
+        if id_type not in EXCLUSIVE_TYPES:
+            return False
+        value = norm_identifier(id_type, raw)
+        known = {norm_identifier(id_type, v) for v in person.identifiers.get(id_type, set())}
+        known |= self.directory.registry.values_of(person.person_id, id_type)
+        return bool(known) and value not in known
+
     def _attribute(
         self,
         m: Mention,
@@ -241,8 +286,6 @@ class Detector:
     ) -> str | None:
         """Owner of an identifier the directory does not know yet."""
         preceding = [o for o in owned if o.label == "NAME" and o.person_id and o.end <= m.start]
-        if preceding and m.start - preceding[-1].end <= 4:
-            return preceding[-1].person_id
         if m.label == "HANDLE":
             return None
         if group.kind == "table":

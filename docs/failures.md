@@ -135,3 +135,28 @@ and the test that now covers it.
   only counts for a person in context, and it renders as the surrogate's given name. Its
   tokens are forbidden in surrogates.
 - **Test**: `tests/test_participants.py::test_display_name_signoff_is_replaced`.
+
+## 12. Identifiers went to the chat author instead of the person named before them
+
+- **Symptom**: on the deployed service, red-team cases B10 ("Soy <known full name>, CC <new
+  number>") and B11 (two unknown homonyms with different cédulas in one batch) created no new
+  person: the cédula went to the author of the copied chat. The local run passed only because
+  the harness counted a stale registry person behind the author as "new". With a stricter
+  harness, B08 and B11 also showed unknown names cut at the lexicon's edge: a given name missing
+  from the lexicon ("soy Wendy ...") and an unlisted second surname stayed in the text.
+- **Root cause**: an identifier was linked to a preceding name only within 4 characters
+  (", CC " is 5), and before that the client author won. An identifier contradicting a
+  person's cédula was attached anyway (unknown names) or dropped to an anonymous person. The
+  external-name detector only covered lexicon tokens.
+- **Fix**: a new identifier goes to the nearest strong or unknown full name before it in the
+  same sentence, up to 40 characters away, before the author or row-owner fallbacks. If that
+  person already has a different cédula (or another one-per-person id), the name belongs to a
+  homonym: a new person keyed by name + identifier, and the name mention is re-owned so it gets
+  its own pseudonym. A new identifier of a type the person lacks (a first phone, an email) is
+  added to the same person. An unknown name also absorbs one following capitalized word
+  (second surname) and, after "soy"/"me llamo"/"mi nombre es", one preceding one. Kept
+  gazetteer terms ("Juan Valdez") are never widened. In the harness, "new person" is judged on
+  the entity that carries the named person's name, never the author's.
+- **Test**: `tests/test_linking.py` (contradicting cédula → new person, first phone → same
+  person, two homonyms → two persons, 5–40 character gaps, widened unknown names, kept terms
+  not widened).

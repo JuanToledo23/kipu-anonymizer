@@ -19,7 +19,7 @@ import httpx
 
 from kipu.audit.auditor import flatten
 from kipu.audit.texto import contiene
-from kipu.directory.names import split_name, strip_accents
+from kipu.directory.names import fold, split_name, strip_accents
 from kipu.ingest.parsers import RawCorpus, load_corpus
 from kipu.ingest.source import DirSource
 
@@ -140,6 +140,19 @@ def expected_entity(entities: list[dict[str, Any]], forms: dict[str, str]) -> di
     return None
 
 
+def named_entities(case: Case, live: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Person entities that carry the name the case writes in the text, never the record's
+    author: a stale registry person behind the author must not count as the new person."""
+    named = fold(case.forms.get("name") or case.spec["new_person"]["name"])
+    authors = {fold(r["author"]) for r in case.records if r.get("author")}
+    found = []
+    for e in live:
+        originals = {fold(o) for o in e.get("originals", [])}
+        if e.get("type") == "person" and named in originals and not originals & authors:
+            found.append(e)
+    return found
+
+
 def check(
     case: Case,
     out: list[dict[str, Any]],
@@ -169,9 +182,8 @@ def check(
     elif mode in ("new", "distinct_new"):
         new = [
             e
-            for e in live
-            if e.get("type") == "person"
-            and e["entity_id"] not in known_ids
+            for e in named_entities(case, live)
+            if e["entity_id"] not in known_ids
             and (e.get("pseudonyms") or {}).get("name") not in known_names
         ]
         need = 2 if mode == "distinct_new" else 1

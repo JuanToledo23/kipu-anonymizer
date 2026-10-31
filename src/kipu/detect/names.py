@@ -21,6 +21,12 @@ GAZETTEER_PATH = Path(__file__).with_name("gazetteer_co.txt")
 MAX_TOKENS = 4
 STRONG_KINDS = ("full", "short", "handle")
 PLAIN_PAIR = re.compile(r"\w+ \w+")
+UPPER = "A-ZÁÉÍÓÚÑ"
+LOWER = "a-záéíóúñü"
+NEXT_WORD = re.compile(rf" ([{UPPER}][{LOWER}]{{2,}})(?![\w@])")
+INTRODUCED_WORD = re.compile(
+    rf"(?i:\b(?:soy|me llamo|mi nombre es|a nombre de|titular:?))\s+([{UPPER}][{LOWER}]{{2,}}) $"
+)
 # Given names that are also everyday words: lowercase, they only count in a vocative or sign-off.
 COMMON_WORD_GIVEN = frozenset(
     {
@@ -142,6 +148,13 @@ class NameIndex:
         self.surnames: dict[str, set[str]] = defaultdict(set)
         self.given_lexicon = set(GIVEN)
         self.surname_lexicon = {fold(s) for s in SURNAMES + DETECTION_ONLY_SURNAMES}
+        kept = [
+            tuple(TOKEN.findall(fold(line)))
+            for line in GAZETTEER_PATH.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.startswith("#")
+        ]
+        self.kept_terms = set(kept)
+        self.kept_words = {w for term in kept for w in term}
         for person in persons:
             self.add(person)
 
@@ -203,7 +216,28 @@ class NameIndex:
                 or self._given_then_unknown_surname(window, span)
             ):
                 found.append(Mention(start, end, span, "NAME", kind="external"))
+                if window in self.kept_terms:
+                    continue
+                wide_start, wide_end = self._widen(text, start, end)
+                if (wide_start, wide_end) != (start, end):
+                    wide = text[wide_start:wide_end]
+                    found.append(Mention(wide_start, wide_end, wide, "NAME", kind="external"))
         return found
+
+    def _widen(self, text: str, start: int, end: int) -> tuple[int, int]:
+        """An unknown name keeps a second surname the lexicon lacks ("Gómez Rentería") and,
+        after "soy" or "me llamo", a given name it lacks ("soy Wendy Patricia Ochoa")."""
+        after = NEXT_WORD.match(text, end)
+        if after and self._may_extend(after.group(1)):
+            end = after.end(1)
+        before = INTRODUCED_WORD.search(text[:start])
+        if before and self._may_extend(before.group(1)):
+            start = before.start(1)
+        return start, end
+
+    def _may_extend(self, word: str) -> bool:
+        folded = fold(word)
+        return folded not in self.given_lexicon and folded not in self.kept_words
 
     def _mentions(self, span: str, start: int, end: int, hits: dict[str, str]) -> list[Mention]:
         """One mention per span: every person the variant can name stays a candidate, so

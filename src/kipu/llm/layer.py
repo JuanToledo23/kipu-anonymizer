@@ -28,7 +28,13 @@ from kipu.llm.identity import (
     homonym_prompt,
     phrase_key,
 )
-from kipu.llm.omissions import OMISSION_SYSTEM, OmissionVerifier, audit_spans, output_units
+from kipu.llm.omissions import (
+    OMISSION_SYSTEM,
+    OmissionVerifier,
+    audit_spans,
+    output_units,
+    suspect_records,
+)
 from kipu.llm.verify import Dispute, Key, Span, Verifier, adjudicate, by_surface
 
 log = logging.getLogger(__name__)
@@ -46,6 +52,7 @@ class LayerReport:
     persons_created: int = 0
     omissions: list[int] = field(default_factory=list)
     audit_spans: list[int] = field(default_factory=list)
+    strong_omissions: dict[str, Any] = field(default_factory=dict)
     passes: int = 0
     seconds: float = 0.0
     capped: bool = False
@@ -59,6 +66,7 @@ class LayerReport:
             "persons_created": self.persons_created,
             "omissions": self.omissions,
             "audit_spans": self.audit_spans,
+            "strong_omissions": self.strong_omissions,
             "passes": self.passes,
             "seconds": round(self.seconds, 2),
             "capped": self.capped,
@@ -121,6 +129,11 @@ class LLMLayer:
             if not found:
                 break
             accepted += found
+        found = self._strong_omissions(anonymizer, outputs, raw)
+        if found:
+            accepted += found
+            self._generalize(accepted)
+            anonymizer, outputs = run_pass(self._hook_factory(accepted, hooks, judge=True), sectors)
         self._finish(anonymizer, hooks, started)
         return anonymizer, outputs
 
@@ -233,6 +246,36 @@ class LLMLayer:
             lambda form: directory.owner_of("account", compact(form)) is not None,
         )
         return found, leaked
+
+    def _strong_omissions(
+        self, anonymizer: Anonymizer, outputs: Outputs, raw: dict[Key, str]
+    ) -> list[Span]:
+        """The strong model re-reads only the records where a person-like bigram is still
+        visible (bounded); it is the adjudicator, so its finds are not disputed again."""
+        records = set(suspect_records(raw, anonymizer.spans))
+        units = [
+            u
+            for u in output_units(outputs)
+            if any(t.record_id in records for item in u.items for t in item.targets)
+        ]
+        model = self.settings.strong
+        verifier = OmissionVerifier(
+            anonymizer.index, anonymizer.kept, model, raw, anonymizer.spans, "omission_strong"
+        )
+        results = self.loop.run(run_units(self.client, units, [model], OMISSION_SYSTEM))
+        found: list[Span] = []
+        for unit in units:
+            accepted, _ = verifier.classify(unit, results.get(unit.unit_id, {}), single=True)
+            found += accepted
+        labels = Counter(s.label for s in found)
+        self.report.strong_omissions = {
+            "records": len(records),
+            "units": len(units),
+            "spans": len(found),
+            "labels": dict(sorted(labels.items())),
+        }
+        log.info("strong omissions: %s", self.report.strong_omissions)
+        return found
 
     def _finish(self, anonymizer: Anonymizer, hooks: list[LLMMentions], started: float) -> None:
         final = hooks[-1] if hooks else None

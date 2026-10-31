@@ -12,7 +12,7 @@ from typing import Any
 from kipu.audit.auditor import audit
 from kipu.detect.mention import Mention
 from kipu.detect.names import KeptMatcher, NameIndex
-from kipu.directory.names import fold
+from kipu.directory.names import GIVEN, fold
 from kipu.ingest.records import ChatRecord, DocRecord, TableRecord
 from kipu.llm.extract import (
     OUTPUT_RULES,
@@ -40,6 +40,9 @@ EMAIL deletreado, QUASI_ID). Si no sabes si un nombre es un seudónimo, lístalo
 descarta los seudónimos. No listes organizaciones, lugares, marcas ni figuras públicas.
 
 {OUTPUT_RULES}"""
+# Two capitalized words, the first a known given name: a person the rules may have missed.
+PERSON_BIGRAM = re.compile(r"\b([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)[ \t]+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\b")
+MAX_STRONG_RECORDS = 150
 
 
 def output_units(outputs: dict[str, list[dict[str, Any]]]) -> list[Unit]:
@@ -62,8 +65,9 @@ class OmissionVerifier(Verifier):
         model: str,
         raw: dict[Key, str],
         final: dict[Key, list[Mention]],
+        source: str = "omission",
     ) -> None:
-        super().__init__(index, kept, {}, [model], ["omission"])
+        super().__init__(index, kept, {}, [model], [source])
         self.raw = raw
         self.final = final
 
@@ -107,6 +111,22 @@ class OmissionVerifier(Verifier):
             for m in pattern.finditer(raw_text)
             if not any(m.start() < e and s < m.end() for s, e in taken)
         ]
+
+
+def suspect_records(
+    raw: dict[Key, str], final: dict[Key, list[Mention]], limit: int = MAX_STRONG_RECORDS
+) -> list[str]:
+    """Records whose raw text still shows a person-like bigram outside every span the last
+    pass replaced or kept (gazetteer terms are kept spans), first `limit` by id."""
+    suspects = set()
+    for (record_id, field), text in raw.items():
+        taken = [(m.start, m.end) for m in final.get((record_id, field), [])]
+        for m in PERSON_BIGRAM.finditer(text):
+            visible = not any(m.start() < e and s < m.end() for s, e in taken)
+            if visible and fold(m.group(1)) in GIVEN:
+                suspects.add(record_id)
+                break
+    return sorted(suspects)[:limit]
 
 
 def audit_spans(

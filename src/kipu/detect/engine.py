@@ -5,6 +5,7 @@ to, whether a bare first name is a participant, and who owns an unknown email or
 """
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
 from kipu.audit.texto import CONFUSABLES, RX_CONFUSABLE
@@ -24,11 +25,12 @@ ID_TYPES = {
     "BIRTH": "birth_iso",
     "ADDRESS": "address",
     "HANDLE": "handle",
+    "ACCOUNT": "account",
 }
 RECORD_KEY = re.compile(r"\b(CL-\d{4,6}|KP-\d{3}|PQR-\d{4}-\d{4})\b")
 RECORD_KEY_TYPES = {"CL-": "cliente_id", "KP-": "kp_id", "PQR": "radicado"}
 STRONG_NAME_KINDS = ("full", "short", "handle")
-LINKING_KINDS = ("full", "short", "external")
+LINKING_KINDS = ("full", "short", "external", "llm_full")
 MAX_LINK_GAP = 40
 SENTENCE_END = re.compile(r"[!?\n]|\.\s+[A-ZÁÉÍÓÚÑ]")
 WEAK_NAME_KINDS = ("first", "surname")
@@ -51,6 +53,12 @@ class Group:
     owner: str | None = None
     kind: str = "chat"
     prefer: str = ""
+    scope: str = ""
+
+
+# Extra mentions for one surface, given the group, its context and the rule mentions already
+# resolved there (the LLM layer); they must not overlap the rule mentions.
+ExtraMentions = Callable[[Surface, Group, list[str], list[Mention]], list[Mention]]
 
 
 class Detector:
@@ -67,6 +75,7 @@ class Detector:
         self.kept = kept
         self.handles = handles or HandleMatcher(directory.persons.values(), kept)
         self.surrogates = surrogates or set()
+        self.extra: ExtraMentions | None = None
 
     def detect(self, group: Group) -> dict[tuple[str, str], list[Mention]]:
         raw = self._candidates(group)
@@ -78,8 +87,11 @@ class Detector:
             assigned = (self._assign(m, raw[key], context, group.prefer) for m in raw[key])
             mentions = [m for m in assigned if m and not self._is_surrogate(m, ours)]
             mentions += self._quasi(surface, context)
+            chosen = resolve_overlaps(mentions)
+            if self.extra:
+                chosen = resolve_overlaps(chosen + self.extra(surface, group, context, chosen))
             owned: list[Mention] = []
-            for m in resolve_overlaps(mentions):
+            for m in chosen:
                 owned.append(self._own(m, surface, group, context, owned))
             resolved[key] = owned
         return resolved

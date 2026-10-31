@@ -3,7 +3,7 @@
 import re
 from collections import defaultdict
 
-from kipu.detect.mention import Mention
+from kipu.detect.mention import GENERALIZED_LABELS, Mention
 from kipu.directory.directory import Directory, Person
 from kipu.directory.names import NameParts, fold, split_name, strip_accents
 from kipu.pseudo.surrogates import SurrogateFactory, SurrogateName
@@ -52,8 +52,26 @@ def fit_alnum(span: str, value: str) -> str:
     return "".join(next(chars, c) if c.isalnum() else c for c in span)
 
 
+MONTH_NAMES = (
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+)
+
+
 def format_date(iso: str, kind: str) -> str:
     year, month, day = iso.split("-")
+    if kind == "words":
+        return f"{int(day)} de {MONTH_NAMES[int(month) - 1]} de {year}"
     if kind == "dmy":
         return f"{day}/{month}/{year}"
     if kind == "mdy":
@@ -70,9 +88,13 @@ def spell_email(email: str, english: bool) -> str:
 class Renderer:
     """Renders surrogates for mentions and remembers which pseudonym values were written."""
 
-    def __init__(self, factory: SurrogateFactory, directory: Directory) -> None:
+    def __init__(
+        self, factory: SurrogateFactory, directory: Directory, sectors: dict[str, str] | None = None
+    ) -> None:
+        """`sectors`: extra folded occupation → sector entries (classified by the LLM layer)."""
         self.factory = factory
         self.directory = directory
+        self.sectors = sectors or {}
         self.used: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
 
     def _note(self, person_id: str, field: str, value: str) -> str:
@@ -81,6 +103,8 @@ class Renderer:
         return value
 
     def render(self, m: Mention) -> str | None:
+        if m.label in GENERALIZED_LABELS:
+            return m.value or None
         person = self.directory.persons.get(m.person_id or "")
         if person is None or m.label == "KEPT":
             return None
@@ -121,8 +145,9 @@ class Renderer:
             return apply_style([self.factory.name(person).surnames[0]], case_style(m.text), False)[
                 0
             ]
-        original = split_name(m.text) if m.kind == "external" else None
-        if m.kind in ("first", "given_lower"):
+        external = m.kind == "external" or (m.kind == "llm_full" and person.kind == "external")
+        original = split_name(m.text) if external else None
+        if m.kind in ("first", "given_lower", "llm_given"):
             return self._first_name(m.text, person)
         return self.name_text(person, m.text, original)
 
@@ -182,11 +207,15 @@ class Renderer:
     def _render_passport(self, m: Mention, person: Person) -> str:
         return self._note(person.person_id, "passport", self.factory.passport(person, m.value))
 
+    def _render_account(self, m: Mention, person: Person) -> str:
+        value = fit_alnum(m.text, self.factory.account(person, m.value))
+        return self._note(person.person_id, "account", value)
+
     def _render_quasi_barrio(self, m: Mention, person: Person) -> str | None:
         return person.attrs.get("ciudad") or None
 
     def _render_quasi_occupation(self, m: Mention, person: Person) -> str | None:
-        return sector_for(person.attrs.get("ocupacion", "")) or None
+        return sector_for(person.attrs.get("ocupacion", ""), self.sectors) or None
 
     def _render_quasi_year(self, m: Mention, person: Person) -> str:
         return GENERALIZED_YEAR

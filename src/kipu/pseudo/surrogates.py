@@ -191,6 +191,9 @@ class SurrogateFactory:
     def passport(self, person: Person, original: str) -> str:
         return self._reserve(person, "passport", original, self._same_shape(original), str.upper)
 
+    def account(self, person: Person, original: str) -> str:
+        return self._reserve(person, "account", original, self._same_shape(original), str.upper)
+
     @staticmethod
     def _same_shape(original: str):
         def make(rng: random.Random, _: int) -> str | None:

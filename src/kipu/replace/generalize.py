@@ -123,8 +123,12 @@ BARRIOS = {
 }
 
 
-def sector_for(occupation: str) -> str:
-    return SECTORS_FOLDED.get(fold(occupation).strip(), FALLBACK_SECTOR) if occupation else ""
+def sector_for(occupation: str, extra: dict[str, str] | None = None) -> str:
+    """The mapping table first, then `extra` (LLM classifications of unseen occupations)."""
+    if not occupation:
+        return ""
+    key = fold(occupation).strip()
+    return SECTORS_FOLDED.get(key) or (extra or {}).get(key) or FALLBACK_SECTOR
 
 
 def swap_barrio(secret: str, person_id: str, city: str, barrio: str) -> str:

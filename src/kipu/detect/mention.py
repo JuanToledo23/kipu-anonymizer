@@ -10,6 +10,7 @@ IDENTIFIER_LABELS = (
     "BIRTH",
     "ADDRESS",
     "HANDLE",
+    "ACCOUNT",
 )
 
 # Overlap resolution: longer span wins, then lower number here.
@@ -22,18 +23,25 @@ PRIORITY = {
     "BIRTH": 1,
     "ADDRESS": 1,
     "HANDLE": 1,
+    "ACCOUNT": 1,
     "SLACK": 1,
     "NAME": 2,
     "KEPT": 3,
     "QUASI_BARRIO": 2.5,
     "QUASI_OCCUPATION": 4,
     "QUASI_YEAR": 4,
+    "QUASI_LLM": 4,
+    "QUASI_AGE": 4,
 }
+# Generalized in place (the mention carries its replacement), no person needed.
+GENERALIZED_LABELS = ("QUASI_LLM", "QUASI_AGE")
 NAME_KIND_PRIORITY = {
     "full": 0,
     "short": 1,
     "external": 2,
     "handle": 2,
+    "llm_full": 2,
+    "llm_given": 3,
     "first": 3,
     "given_lower": 3,
     "surname": 4,
@@ -44,8 +52,8 @@ NAME_KIND_PRIORITY = {
 class Mention:
     """A span of a text surface that refers to a person, an identifier or a kept entity.
 
-    `source` names the detector family ("rules" today); an LLM layer adds candidates with
-    source="llm" and they go through the same overlap resolution.
+    `source` names the detector family: "rules", or "llm" for spans proposed by a model and
+    verified in code (they never overlap a rule span).
     """
 
     start: int

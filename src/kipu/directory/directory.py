@@ -14,7 +14,16 @@ log = logging.getLogger(__name__)
 
 KIND_PRIORITY = {"client": 0, "employee": 1, "client_user": 2, "employee_user": 3}
 EXCLUSIVE_TYPES = ("cedula", "cliente_id", "kp_id", "uid")
-STORED_TYPES = (*STRONG, "address", "birth_iso", "passport", "plate", "handle", "radicado")
+STORED_TYPES = (
+    *STRONG,
+    "address",
+    "birth_iso",
+    "passport",
+    "plate",
+    "handle",
+    "radicado",
+    "account",
+)
 
 
 @dataclass

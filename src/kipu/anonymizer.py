@@ -44,9 +44,15 @@ FORM_LABELS = {"NAME", *IDENTIFIER_LABELS}
 
 class Anonymizer:
     def __init__(
-        self, registry: Registry, directory: Directory, secret: str, live: bool = False
+        self,
+        registry: Registry,
+        directory: Directory,
+        secret: str,
+        live: bool = False,
+        sectors: dict[str, str] | None = None,
     ) -> None:
-        """`live` (the API): values we already wrote as surrogates are left untouched."""
+        """`live` (the API): values we already wrote as surrogates are left untouched.
+        `sectors`: occupations outside the mapping table, classified by the LLM layer."""
         self.registry = registry
         self.directory = directory
         self.secret = secret
@@ -63,8 +69,10 @@ class Anonymizer:
             forbidden_tokens,
             lambda field, value: _is_real(directory, self.observed, field, value),
         )
-        self.renderer = Renderer(self.factory, directory)
+        self.sectors = sectors or {}
+        self.renderer = Renderer(self.factory, directory, self.sectors)
         self.ledger = EntityLedger()
+        self.spans: dict[tuple[str, str], list[Mention]] = {}
 
     def observe(self, texts: Iterable[str]) -> None:
         """Plates seen anywhere in the input, so no surrogate plate reproduces one of them."""
@@ -77,6 +85,7 @@ class Anonymizer:
         out = {}
         for surface in group.surfaces:
             mentions = found[(surface.record_id, surface.field)]
+            self.spans[(surface.record_id, surface.field)] = mentions
             self._record(mentions, surface.record_id)
             out[(surface.record_id, surface.field)] = apply_mentions(
                 surface.text, mentions, self.renderer
@@ -110,7 +119,9 @@ class Anonymizer:
                     Surface(r.id, f"attachments.{i}", a.filename)
                     for i, a in enumerate(r.attachments)
                 ]
-            replaced = self._apply(Group(surfaces, authors=authors, kind="chat"))
+            replaced = self._apply(
+                Group(surfaces, authors=authors, kind="chat", scope=thread[0].thread_id)
+            )
             for r in thread:
                 results[r.id] = self._chat_output(r, authors.get(r.id), replaced)
         return [results[r.id] for r in records]
@@ -156,7 +167,7 @@ class Anonymizer:
                 Surface(r.id, "body", r.body, free_text=True),
             ]
             surfaces += [Surface(r.id, f"metadata.{k}", v) for k, v in r.metadata.items()]
-            replaced = self._apply(Group(surfaces, kind="doc", prefer="employee"))
+            replaced = self._apply(Group(surfaces, kind="doc", prefer="employee", scope=r.id))
             results.append(
                 {
                     "id": r.id,
@@ -180,7 +191,9 @@ class Anonymizer:
             if v and k not in UNTOUCHED_COLUMNS and k not in GENERALIZED_COLUMNS
         ]
         prefer = "employee" if r.table == "empleados" else "client"
-        replaced = self._apply(Group(surfaces, owner=owner, kind="table", prefer=prefer))
+        replaced = self._apply(
+            Group(surfaces, owner=owner, kind="table", prefer=prefer, scope=r.id)
+        )
         columns = {}
         for key, value in r.columns.items():
             columns[key] = replaced.get((r.id, f"columns.{key}"), value)
@@ -196,7 +209,7 @@ class Anonymizer:
 
     def _generalize_row(self, owner: str, columns: dict[str, str]) -> None:
         if columns.get("ocupacion"):
-            columns["ocupacion"] = sector_for(columns["ocupacion"])
+            columns["ocupacion"] = sector_for(columns["ocupacion"], self.sectors)
         if columns.get("barrio"):
             columns["barrio"] = swap_barrio(
                 self.secret, owner, columns.get("ciudad", ""), columns["barrio"]

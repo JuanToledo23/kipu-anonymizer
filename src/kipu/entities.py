@@ -17,6 +17,7 @@ SINGLE_VALUE_FIELDS = (
     "address",
     "plate",
     "passport",
+    "account",
     "handle",
 )
 

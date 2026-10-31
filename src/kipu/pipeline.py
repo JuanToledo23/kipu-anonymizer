@@ -21,6 +21,7 @@ from kipu.directory.registry import Registry
 from kipu.directory.seed import seeds_from_tables, seeds_from_users
 from kipu.ingest.parsers import RawCorpus, load_corpus
 from kipu.ingest.source import DirSource, HttpSource, SourceClient
+from kipu.llm.layer import HookFactory, LLMLayer, RunPass
 
 log = logging.getLogger("kipu.pipeline")
 
@@ -41,6 +42,8 @@ class RunReport:
     pdf_xmp_docs: list[str] = field(default_factory=list)
     tokens_in: int = 0
     tokens_out: int = 0
+    usd: float = 0.0
+    llm: dict[str, Any] = field(default_factory=dict)
 
 
 def make_source(spec: str, settings: Settings, run_id: str) -> SourceClient:
@@ -82,6 +85,28 @@ def build_directory(
     return directory, authors
 
 
+def corpus_pass(corpus: RawCorpus, registry: Registry, settings: Settings) -> RunPass:
+    """One anonymization pass over the whole corpus. The directory is rebuilt from the seeds
+    every pass, so the rules see exactly the same persons each time."""
+
+    def run_pass(
+        hook: HookFactory | None, sectors: dict[str, str]
+    ) -> tuple[Anonymizer, dict[str, list[dict[str, Any]]]]:
+        directory, authors = build_directory(corpus, registry)
+        anonymizer = Anonymizer(registry, directory, settings.pseudonym_secret, sectors=sectors)
+        if hook is not None:
+            anonymizer.detector.extra = hook(anonymizer)
+        anonymizer.observe(record_text(r.model_dump()) for r in corpus.records())
+        outputs = {
+            "chats": anonymizer.chats(corpus.chats, authors),
+            "docs": anonymizer.docs(corpus.docs),
+            "tables": anonymizer.tables(corpus.tables),
+        }
+        return anonymizer, outputs
+
+    return run_pass
+
+
 def run(
     source: SourceClient, out_dir: Path, settings: Settings, run_id: str | None = None
 ) -> RunReport:
@@ -91,14 +116,21 @@ def run(
     report.pdf_xmp_docs = sorted(corpus.pdf_xmp)
     registry = Registry(settings.registry_path)
     try:
-        directory, authors = build_directory(corpus, registry)
-        anonymizer = Anonymizer(registry, directory, settings.pseudonym_secret)
-        anonymizer.observe(record_text(r.model_dump()) for r in corpus.records())
-        outputs = {
-            "chats": anonymizer.chats(corpus.chats, authors),
-            "docs": anonymizer.docs(corpus.docs),
-            "tables": anonymizer.tables(corpus.tables),
-        }
+        run_pass = corpus_pass(corpus, registry, settings)
+        llm_created: set[str] = set()
+        if settings.llm.enabled:
+            layer = LLMLayer(settings.llm, settings.llm_cache_dir)
+            anonymizer, outputs = layer.refine_corpus(
+                corpus.chats, corpus.docs, corpus.tables, run_pass
+            )
+            report.llm = layer.report.as_dict()
+            report.tokens_in = layer.report.usage["tokens_in"]
+            report.tokens_out = layer.report.usage["tokens_out"]
+            report.usd = layer.report.usage["usd"]
+            llm_created = layer.final_created
+        else:
+            anonymizer, outputs = run_pass(None, {})
+        directory = anonymizer.directory
         all_records = [r for recs in outputs.values() for r in recs]
         entities = anonymizer.entities(all_records)
         registry.record_forms(
@@ -110,8 +142,9 @@ def run(
             ][:200_000]
         )
         report.persons = sum(1 for e in entities if not e.get("kept"))
-        report.persons_created = len(directory.created)
-        report.persons_reused = len(directory.persons) - report.persons_created
+        created = {p for p in directory.created if p in directory.persons} | llm_created
+        report.persons_created = len(created)
+        report.persons_reused = len(directory.persons) - len(directory.created)
     finally:
         registry.close()
     report.records = {k: len(v) for k, v in outputs.items()}
@@ -185,6 +218,8 @@ def main() -> None:
     )
     log.info("missing ids vs record_index: %s", report.missing_ids)
     log.info("audit: %d records with leaked forms", len(report.audit_hits))
+    if report.llm:
+        log.info("llm: %s", orjson.dumps(report.llm).decode())
     for record_id, forms in list(report.audit_hits.items())[:20]:
         log.info("  leak %s: %s", record_id, sorted(set(forms))[:5])
     if report.pdf_xmp_docs:

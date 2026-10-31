@@ -1,0 +1,8 @@
+.env
+data/
+muestra_para_chat.zip
+__pycache__/
+.venv/
+node_modules/
+preview.png
+*.sqlite

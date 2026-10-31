@@ -1,0 +1,116 @@
+# Organizations, places, brands and public figures that are kept verbatim (not natural persons).
+# One term per line. Matching is accent- and case-insensitive for multi-word terms; single words
+# must appear capitalized.
+Bancolombia
+Banco de Bogotá
+Banco de Occidente
+Banco Popular
+Banco Caja Social
+Banco Agrario
+BBVA
+Davivienda
+Scotiabank Colpatria
+Colpatria
+Itaú
+Banco Falabella
+Nequi
+Daviplata
+Movii
+Lulo Bank
+Nu Colombia
+Nubank
+PSE
+Bre-B
+Efecty
+Baloto
+Superfinanciera
+Superintendencia Financiera
+SFC
+SIC
+DataCrédito
+Datacrédito
+TransUnion
+CIFIN
+DIAN
+Registraduría
+Fiscalía
+Policía Nacional
+Avianca
+Carulla
+Éxito
+Olímpica
+Jumbo
+D1
+Ara
+Falabella
+Homecenter
+Rappi
+Uber
+Didi
+Mercado Libre
+Seguros Bolívar
+Sura
+Colsanitas
+Andes Capital
+Auditores Andinos
+Mensajería Veloz
+Mensajeria Veloz
+Veloz
+Kipu Pay
+Kipi
+WhatsApp
+Walgreens
+Loom
+Visa
+Mastercard
+Los Andes
+Universidad de los Andes
+Feria de las Flores
+Plaza Botero
+Parque de Bolívar
+Parque Berrío
+Estación Restrepo
+Shakira
+Simón Bolívar
+Gabriel García Márquez
+Fernando Botero
+Bogotá
+Medellín
+Cali
+Barranquilla
+Cartagena
+Bucaramanga
+Pereira
+Manizales
+Cúcuta
+Santa Marta
+Ibagué
+Villavicencio
+Pasto
+Montería
+Neiva
+Armenia
+Envigado
+Itagüí
+Sabaneta
+Bello
+Soacha
+Dosquebradas
+Antioquia
+Santander
+Cundinamarca
+Valle del Cauca
+Atlántico
+Bolívar
+Colombia
+Miami
+Portugal
+Juan Valdez
+Parque Lleras
+Farmatodo
+Santa Mónica
+San Fernando
+Parque Simón Bolívar
+Jorge Isaacs
+Ciudad Jardín
+Villa Olímpica

@@ -21,6 +21,8 @@ from kipu.config import Settings, load_settings
 from kipu.directory.directory import Directory
 from kipu.directory.registry import Registry
 from kipu.ingest.records import ChatRecord, DocRecord, TableRecord
+from kipu.llm.client import LLMClient
+from kipu.llm.layer import HookFactory, LLMLayer
 from kipu.pipeline import OUTPUT_FILES, http_source, run
 
 log = logging.getLogger("kipu.api")
@@ -61,7 +63,7 @@ class Job:
         self.started_at: str | None = None
         self.finished_at: str | None = None
         self.records: dict[str, int] = {}
-        self.cost = {"tokens_in": 0, "tokens_out": 0, "seconds": 0.0}
+        self.cost: dict[str, Any] = {"tokens_in": 0, "tokens_out": 0, "seconds": 0.0, "usd": 0.0}
         self.error: str | None = None
         self.audit_leaks = 0
 
@@ -157,6 +159,8 @@ class JobManager:
                 "tokens_in": report.tokens_in,
                 "tokens_out": report.tokens_out,
                 "seconds": report.seconds,
+                "usd": report.usd,
+                "models": report.llm.get("models", {}),
             }
             job.audit_leaks = len(report.audit_hits)
             job.status = "done"
@@ -187,34 +191,57 @@ class AnonymizeService:
     batch must see them so a new person gets one pseudonym. A run in progress uses its own
     connection; the registry's process-wide write lock keeps the two consistent."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, client: LLMClient | None = None) -> None:
+        """`client` replaces the LLM client (tests); by default a fresh one per batch."""
         self.settings = settings
         self.lock = threading.Lock()
+        self.client = client
 
     def anonymize(self, source: str, records: list[Any]) -> dict[str, Any]:
+        """Rules and registry first; with the LLM layer on, the primary model then adds what it
+        verifies within the time budget (`LLMSettings.anonymize_budget`)."""
         with self.lock:
             registry = Registry(self.settings.registry_path)
             try:
-                anonymizer = Anonymizer(
-                    registry,
-                    Directory.from_registry(registry),
-                    self.settings.pseudonym_secret,
-                    live=True,
-                )
-                anonymizer.observe(record_text(r.model_dump()) for r in records)
-                outputs = getattr(anonymizer, source)(records)
-                return {"records": outputs, "entities": anonymizer.entities(outputs)}
+
+                def run_pass(
+                    hook: HookFactory | None, sectors: dict[str, str]
+                ) -> tuple[Anonymizer, dict[str, list[dict[str, Any]]]]:
+                    anonymizer = Anonymizer(
+                        registry,
+                        Directory.from_registry(registry),
+                        self.settings.pseudonym_secret,
+                        live=True,
+                        sectors=sectors,
+                    )
+                    if hook is not None:
+                        anonymizer.detector.extra = hook(anonymizer)
+                    anonymizer.observe(record_text(r.model_dump()) for r in records)
+                    return anonymizer, {source: getattr(anonymizer, source)(records)}
+
+                if self.settings.llm.enabled:
+                    layer = LLMLayer(self.settings.llm, self.settings.llm_cache_dir, self.client)
+                    anonymizer, outputs = layer.refine_batch(source, records, run_pass)
+                else:
+                    anonymizer, outputs = run_pass(None, {})
+                return {
+                    "records": outputs[source],
+                    "entities": anonymizer.entities(outputs[source]),
+                }
             finally:
                 registry.close()
 
 
 def create_app(
-    settings: Settings | None = None, transport: httpx.BaseTransport | None = None
+    settings: Settings | None = None,
+    transport: httpx.BaseTransport | None = None,
+    llm_client: LLMClient | None = None,
 ) -> FastAPI:
-    """`transport` replaces the network for the sources API (tests)."""
+    """`transport` replaces the network for the sources API and `llm_client` the LLM
+    providers (tests)."""
     settings = settings or load_settings()
     jobs = JobManager(settings, transport)
-    anonymizer = AnonymizeService(settings)
+    anonymizer = AnonymizeService(settings, llm_client)
     app = FastAPI(title="Kipu Pay anonymizer", default_response_class=OrjsonResponse)
 
     def authorize(authorization: str | None = Header(default=None)) -> None:
@@ -227,7 +254,12 @@ def create_app(
 
     @public.get("/health")
     def health() -> dict[str, Any]:
-        return {"status": "ok", "team": TEAM, "version": __version__, "models": []}
+        return {
+            "status": "ok",
+            "team": TEAM,
+            "version": __version__,
+            "models": settings.llm.models,
+        }
 
     @router.post("/run", status_code=202)
     def start_run(request: RunRequest) -> dict[str, str]:

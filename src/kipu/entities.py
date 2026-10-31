@@ -4,7 +4,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
-from kipu.audit.texto import contiene
+from kipu.audit.texto import contiene, norm
 from kipu.replace.render import Renderer
 
 KEPT_REASON = "organización, lugar, marca o figura pública; no es persona natural"
@@ -97,6 +97,7 @@ def build_entities(
                 "records": records,
             }
         )
+    _drop_shared_originals(entities)
     for i, term in enumerate(sorted(ledger.kept), start=1):
         entities.append(
             {
@@ -110,6 +111,19 @@ def build_entities(
             }
         )
     return entities
+
+
+def _drop_shared_originals(entities: list[dict[str, Any]]) -> None:
+    """A form declared by two entities ("Luis Santander" for two homonyms) names neither;
+    looking a person up by it would find both. It stays replaced in the records."""
+    owners: dict[str, int] = defaultdict(int)
+    for entity in entities:
+        for form in {norm(o) for o in entity["originals"]}:
+            owners[form] += 1
+    for entity in entities:
+        kept = [o for o in entity["originals"] if owners[norm(o)] == 1]
+        if kept:
+            entity["originals"] = kept
 
 
 def _sort_key(person_id: str) -> tuple[int, str]:

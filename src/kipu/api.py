@@ -2,10 +2,13 @@
 
 import datetime as dt
 import logging
+import os
 import threading
 import uuid
+from pathlib import Path
 from typing import Any, Literal
 
+import httpx
 import orjson
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
@@ -29,6 +32,7 @@ RECORD_MODELS: dict[str, Any] = {
     "tables": TypeAdapter(list[TableRecord]),
 }
 MEDIA_TYPES = {".jsonl": "application/x-ndjson", ".json": "application/json"}
+MAX_JOBS = 200
 
 
 class OrjsonResponse(JSONResponse):
@@ -37,8 +41,10 @@ class OrjsonResponse(JSONResponse):
 
 
 class RunRequest(BaseModel):
-    sources_url: str
-    token: str
+    """Both fields come from the body; `.env` (FUENTES_URL, FUENTES_TOKEN) only fills a gap."""
+
+    sources_url: str | None = None
+    token: str | None = None
 
 
 class AnonymizeRequest(BaseModel):
@@ -47,6 +53,8 @@ class AnonymizeRequest(BaseModel):
 
 
 class Job:
+    FIELDS = ("status", "started_at", "finished_at", "records", "cost", "error", "audit_leaks")
+
     def __init__(self) -> None:
         self.id = uuid.uuid4().hex[:12]
         self.status = "queued"
@@ -70,32 +78,80 @@ class Job:
                 body[key] = getattr(self, key)
         return body
 
+    def to_state(self) -> dict[str, Any]:
+        return {"id": self.id, **{k: getattr(self, k) for k in self.FIELDS}}
+
+    @classmethod
+    def from_state(cls, state: dict[str, Any]) -> "Job":
+        job = cls()
+        job.id = state["id"]
+        for key in cls.FIELDS:
+            if key in state:
+                setattr(job, key, state[key])
+        return job
+
 
 class JobManager:
-    """Runs one regeneration at a time in a background thread."""
+    """Runs one regeneration at a time in a background thread. The job list lives in
+    `$DATA_DIR/jobs.json` so `GET /run/{id}` still answers after a restart."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, transport: httpx.BaseTransport | None = None) -> None:
         self.settings = settings
-        self.jobs: dict[str, Job] = {}
-        self.current: Job | None = None
+        self.transport = transport
+        self.path = settings.data_dir / "jobs.json"
         self.lock = threading.Lock()
+        self.jobs: dict[str, Job] = self._load()
+        self.current: Job | None = None
+
+    def _load(self) -> dict[str, Job]:
+        if not self.path.is_file():
+            return {}
+        try:
+            states = orjson.loads(self.path.read_bytes())
+        except orjson.JSONDecodeError:
+            log.warning("unreadable %s, starting with an empty job list", self.path)
+            return {}
+        jobs = {s["id"]: Job.from_state(s) for s in states}
+        interrupted = [j for j in jobs.values() if j.status in ("queued", "running")]
+        for job in interrupted:
+            job.status = "failed"
+            job.error = "interrupted: the service restarted before the run finished"
+            job.finished_at = job.finished_at or _now()
+        if interrupted:
+            _write_json(self.path, [j.to_state() for j in jobs.values()])
+        return jobs
+
+    def save(self) -> None:
+        with self.lock:
+            states = [j.to_state() for j in list(self.jobs.values())[-MAX_JOBS:]]
+            _write_json(self.path, states)
 
     def submit(self, request: RunRequest) -> Job:
+        url = request.sources_url or self.settings.fuentes_url
+        token = request.token or self.settings.fuentes_token
         with self.lock:
             if self.current and self.current.status in ("queued", "running"):
                 return self.current
             job = Job()
             self.jobs[job.id] = job
             self.current = job
-        threading.Thread(target=self._run, args=(job, request), daemon=True).start()
+        self.save()
+        threading.Thread(target=self._run, args=(job, url, token), daemon=True).start()
         return job
 
-    def _run(self, job: Job, request: RunRequest) -> None:
-        job.status = "running"
-        job.started_at = _now()
-        source = http_source(request.sources_url, request.token, self.settings, job.id)
+    def _run(self, job: Job, url: str, token: str) -> None:
+        """Any exception marks the job failed; output/ is only replaced by a finished run."""
         try:
-            report = run(source, self.settings.output_dir, self.settings)
+            job.status = "running"
+            job.started_at = _now()
+            self.save()
+            if not url or not token:
+                raise ValueError("sources_url and token are required (body or .env)")
+            source = http_source(url, token, self.settings, job.id, self.transport)
+            try:
+                report = run(source, self.settings.output_dir, self.settings, job.id)
+            finally:
+                source.close()
             job.records = report.records
             job.cost = {
                 "tokens_in": report.tokens_in,
@@ -109,8 +165,15 @@ class JobManager:
             job.status = "failed"
             job.error = f"{type(exc).__name__}: {exc}"
         finally:
-            source.close()
             job.finished_at = _now()
+            self.save()
+
+
+def _write_json(path: Path, value: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_bytes(orjson.dumps(value, option=orjson.OPT_INDENT_2))
+    os.replace(tmp, path)
 
 
 def _now() -> str:
@@ -118,7 +181,11 @@ def _now() -> str:
 
 
 class AnonymizeService:
-    """Live anonymization against the persistent registry (same pseudonyms as output/)."""
+    """Live anonymization against the persistent registry (same pseudonyms as output/).
+
+    Batches run one at a time: each one reads the registry, may add persons, and the next
+    batch must see them so a new person gets one pseudonym. A run in progress uses its own
+    connection; the registry's process-wide write lock keeps the two consistent."""
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -141,9 +208,12 @@ class AnonymizeService:
                 registry.close()
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None, transport: httpx.BaseTransport | None = None
+) -> FastAPI:
+    """`transport` replaces the network for the sources API (tests)."""
     settings = settings or load_settings()
-    jobs = JobManager(settings)
+    jobs = JobManager(settings, transport)
     anonymizer = AnonymizeService(settings)
     app = FastAPI(title="Kipu Pay anonymizer", default_response_class=OrjsonResponse)
 

@@ -175,3 +175,30 @@ and the test that now covers it.
   the output schema are skipped with a warning. A 304 without a cached copy refetches
   unconditionally. Failures raise `SourceError` naming the URL and the attempts.
 - **Test**: `tests/test_ingest_growth.py`.
+
+## 14. A run and /anonymize could race on the registry
+
+- **Symptom**: found by review while adding concurrency tests: two connections (a run and an
+  `/anonymize` batch) could both decide a person or a surrogate did not exist yet.
+- **Root cause**: `external_person` and surrogate reservation were check-then-insert across
+  separate statements, the write lock was per connection, and `BEGIN` was deferred (a
+  read-then-write transaction can fail with `SQLITE_BUSY` instead of waiting). A lost
+  reservation race made the factory try further candidates for a (person, field, original)
+  that already had a value.
+- **Fix**: one process-wide write lock for every registry connection, `BEGIN IMMEDIATE`, an
+  explicit `busy_timeout`, and atomic get-or-create for external persons and surrogates
+  (`reserve_surrogate` returns the value already stored when another connection won).
+- **Test**: `tests/test_service.py::test_parallel_anonymize_batches_share_new_persons`,
+  `test_anonymize_answers_during_a_run_and_the_run_keeps_its_persons`.
+
+## 15. Jobs lost on restart; a failure before the pipeline left a job running
+
+- **Symptom**: after a restart `GET /run/{id}` answered 404 for every earlier job. An error
+  while building the source client (before the `try`) left the job `running` forever.
+- **Root cause**: jobs lived only in memory, and the job body started outside the error handler.
+- **Fix**: the job list persists in `$DATA_DIR/jobs.json` (atomic write on every change); jobs
+  found `queued`/`running` at startup become `failed` ("interrupted"). The whole job body runs
+  inside the handler, which records the error and the finish time.
+- **Test**: `tests/test_service.py::test_output_entities_and_jobs_survive_a_restart`,
+  `test_a_run_interrupted_by_a_restart_is_reported_failed`,
+  `test_unexpected_pipeline_error_fails_the_job_and_keeps_the_output`.

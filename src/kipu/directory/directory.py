@@ -139,14 +139,12 @@ class Directory:
             name = " ".join(w.capitalize() for w in re.split(r"[_.\-]+", name) if w)
         parts = split_name(name)
         gender = gender or infer_gender(parts.first)
-        person_id = existing
-        if person_id is None:
-            person_id = self.registry.new_person("external", gender, parts.full, {})
+        person_id, created = self.registry.external_person(lookup, gender, parts.full, name)
+        if created:
             self.created.add(person_id)
         person = Person(person_id, "external", gender, parts)
         if name:
             person.names.add(name)
-        self.registry.add_identifier(person_id, "external", lookup, name, "text")
         self.by_id[("external", lookup)] = person_id
         self.persons[person_id] = person
         return person

@@ -32,13 +32,26 @@ Docker: `make docker-build` then
 `docker run -p 9000:9000 --env-file .env -v kipu-data:/data kipu-anonymizer`.
 Keep the `/data` volume: it holds the registry that keeps pseudonyms stable between runs.
 
-### Sources client
+### Service state
+
+Everything the service needs after a restart lives under `$DATA_DIR`: `output/` (the last
+completed run, swapped in atomically, so a failed run never touches it), `jobs.json` (the job
+list, so `GET /run/{id}` answers after a restart; a job that was running when the process died
+is reported `failed` with "interrupted") and `registry.sqlite` (persons and surrogates, never
+rebuilt). `POST /run` uses `sources_url` and `token` from the body; `FUENTES_URL` and
+`FUENTES_TOKEN` only fill a missing field. Any error in a run marks the job `failed` with the
+message and the previous output keeps being served.
 
 The sources client has connect (10 s) and read (60 s) timeouts and retries 429/5xx and transport
 errors with exponential backoff (`Retry-After` honored), so one flaky page does not fail a run.
 Channels, dates, docs and tables are enumerated from the API listings; a listed date or doc
 that answers 404 is skipped with a log line. Each run logs one summary line
 (`persons reused=… created=…, records chats=… docs=… tables=…, seconds=…`).
+
+`/anonymize` batches run one at a time against the registry, also while a run is in progress.
+The registry is SQLite in WAL mode (busy timeout 30 s); every write goes through one
+process-wide lock in an IMMEDIATE transaction, and creating a person or reserving a surrogate is
+an atomic get-or-create, so a person created by `/anonymize` during a run keeps its pseudonym.
 
 Production runs on Fly.io (`https://kipu-anonymizer.fly.dev/v1`); see [docs/deploy.md](docs/deploy.md)
 for deploys, secrets and logs. Never deploy while an evaluation run is in progress.

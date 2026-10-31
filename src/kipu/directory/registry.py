@@ -1,4 +1,9 @@
-"""Persistent person registry in SQLite. Rows are only ever added; it is never rebuilt."""
+"""Persistent person registry in SQLite. Rows are only ever added; it is never rebuilt.
+
+A run and concurrent /anonymize calls each open their own connection to the same file. Every
+write goes through one process-wide lock and an IMMEDIATE transaction, and every
+check-then-insert (new external person, surrogate reservation) happens inside it.
+"""
 
 import json
 import sqlite3
@@ -44,6 +49,8 @@ CREATE TABLE IF NOT EXISTS observed_forms (
 CREATE TABLE IF NOT EXISTS journal (ts REAL NOT NULL, op TEXT NOT NULL, payload TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS counters (name TEXT PRIMARY KEY, value INTEGER NOT NULL);
 """
+BUSY_TIMEOUT_MS = 30_000
+WRITE_LOCK = threading.RLock()
 
 
 class Registry:
@@ -51,16 +58,21 @@ class Registry:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(
-            self.path, check_same_thread=False, isolation_level=None, timeout=30
+            self.path,
+            check_same_thread=False,
+            isolation_level=None,
+            timeout=BUSY_TIMEOUT_MS / 1000,
         )
-        self.conn.execute("PRAGMA journal_mode=WAL")
-        self.conn.executescript(SCHEMA)
-        self.lock = threading.RLock()
+        self.conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
+        self.lock = WRITE_LOCK
+        with self.lock:
+            self.conn.execute("PRAGMA journal_mode=WAL")
+            self.conn.executescript(SCHEMA)
 
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:
         with self.lock:
-            self.conn.execute("BEGIN")
+            self.conn.execute("BEGIN IMMEDIATE")
             try:
                 yield self.conn
             except BaseException:
@@ -76,20 +88,40 @@ class Registry:
 
     def new_person(self, kind: str, gender: str, name: str, attrs: dict[str, str]) -> str:
         with self.transaction() as c:
-            row = c.execute("SELECT value FROM counters WHERE name='person'").fetchone()
-            value = (row[0] if row else 0) + 1
-            c.execute(
-                "INSERT INTO counters VALUES ('person', ?) "
-                "ON CONFLICT(name) DO UPDATE SET value=excluded.value",
-                (value,),
-            )
-            person_id = f"p_{value:03d}"
-            c.execute(
-                "INSERT INTO persons VALUES (?, ?, ?, ?, ?, ?)",
-                (person_id, kind, gender, time.time(), name, json.dumps(attrs, ensure_ascii=False)),
-            )
-            self.journal("new_person", {"person_id": person_id, "kind": kind})
+            return self._insert_person(c, kind, gender, name, attrs)
+
+    def _insert_person(
+        self, c: sqlite3.Connection, kind: str, gender: str, name: str, attrs: dict[str, str]
+    ) -> str:
+        row = c.execute("SELECT value FROM counters WHERE name='person'").fetchone()
+        value = (row[0] if row else 0) + 1
+        c.execute(
+            "INSERT INTO counters VALUES ('person', ?) "
+            "ON CONFLICT(name) DO UPDATE SET value=excluded.value",
+            (value,),
+        )
+        person_id = f"p_{value:03d}"
+        c.execute(
+            "INSERT INTO persons VALUES (?, ?, ?, ?, ?, ?)",
+            (person_id, kind, gender, time.time(), name, json.dumps(attrs, ensure_ascii=False)),
+        )
+        self.journal("new_person", {"person_id": person_id, "kind": kind})
         return person_id
+
+    def external_person(
+        self, lookup: str, gender: str, full_name: str, raw: str
+    ) -> tuple[str, bool]:
+        """Person keyed by an `external` lookup, created if absent; True when created now."""
+        with self.transaction() as c:
+            existing = self.owner("external", lookup)
+            if existing:
+                return existing, False
+            person_id = self._insert_person(c, "external", gender, full_name, {})
+            c.execute(
+                "INSERT INTO identifiers VALUES (?, 'external', ?, ?, 'text')",
+                (person_id, lookup, raw),
+            )
+            return person_id, True
 
     def update_profile(self, person_id: str, name: str, attrs: dict[str, str]) -> None:
         with self.lock:
@@ -152,18 +184,23 @@ class Registry:
 
     def reserve_surrogate(
         self, person_id: str, field: str, original_norm: str, value: str, value_norm: str
-    ) -> bool:
-        """Reserve a surrogate value; False when another person already holds it."""
-        with self.lock:
+    ) -> str | None:
+        """The surrogate now held for (person, field, original): `value` if it reserved
+        cleanly, or the one another connection stored first. None when another person
+        already holds `value`."""
+        with self.transaction() as c:
+            stored = self.surrogate(person_id, field, original_norm)
+            if stored is not None:
+                return stored
             try:
-                self.conn.execute(
+                c.execute(
                     "INSERT INTO surrogates VALUES (?, ?, ?, ?, ?)",
                     (person_id, field, original_norm, value, value_norm),
                 )
             except sqlite3.IntegrityError:
-                return False
+                return None
             self.journal("reserve", {"person_id": person_id, "field": field})
-            return True
+            return value
 
     def surrogate_values(self) -> list[tuple[str, str]]:
         return self.conn.execute("SELECT field, value FROM surrogates").fetchall()

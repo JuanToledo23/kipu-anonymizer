@@ -81,10 +81,11 @@ class SurrogateFactory:
             candidate = make(self.rng(person.person_id, f"{field}:{original}", counter), counter)
             if candidate is None or (field != "name" and self.is_real(field, candidate)):
                 continue
-            if self.registry.reserve_surrogate(
+            reserved = self.registry.reserve_surrogate(
                 person.person_id, field, original, candidate, normalize(candidate)
-            ):
-                return candidate
+            )
+            if reserved is not None:
+                return reserved
         raise RuntimeError(f"no free surrogate for field {field}")
 
     def name(self, person: Person) -> SurrogateName:

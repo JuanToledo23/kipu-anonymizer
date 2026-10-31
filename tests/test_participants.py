@@ -78,3 +78,39 @@ def test_live_mode_leaves_our_own_surrogates_alone(registry, directory) -> None:
     again = live.chats([ChatRecord(**{**copied, "author": "Kipi", "attachments": []})])
     assert again[0]["text"] == copied["text"]
     assert live.entities(again) == []
+
+
+def bare_mention_owner(anonymizer: Anonymizer, texts: list[str]) -> str | None:
+    """Person given to the bare "Camila Arango" in the last message of a bot-only thread."""
+    records = [chat(str(i), text, author="Kipi") for i, text in enumerate(texts)]
+    anonymizer.chats(records)
+    last = anonymizer.spans[(records[-1].id, "text")]
+    return next(m.person_id for m in last if m.text == "Camila Arango")
+
+
+def test_bare_homonym_prefers_identifier_owner_over_a_name_elsewhere(anonymizer) -> None:
+    velasquez = anonymizer.directory.owner_of("cliente_id", "CL-12538")
+    owner = bare_mention_owner(
+        anonymizer,
+        [
+            "Caso de Camila Arango Mejía cerrado.",
+            "Nuevo caso, cédula 1022649507.",
+            "Hablé con Camila Arango y ya quedó.",
+        ],
+    )
+    assert owner == velasquez
+
+
+def test_bare_homonym_without_evidence_goes_to_the_judge(anonymizer) -> None:
+    asked = []
+
+    def judge(name, candidates, group):
+        asked.append(name)
+        return candidates[-1]
+
+    anonymizer.detector.judge = judge
+    owner = bare_mention_owner(anonymizer, ["Hablé con Camila Arango y ya quedó."])
+    assert asked == ["Camila Arango"]
+    assert owner == max(
+        anonymizer.directory.owner_of("cliente_id", c) for c in ("CL-12538", "CL-57176")
+    )

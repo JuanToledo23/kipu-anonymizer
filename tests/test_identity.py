@@ -71,3 +71,49 @@ def test_shared_email_across_corpora_does_not_merge_persons(registry) -> None:
     assert martina != manuela
     assert new.owner_of("email", "mcastano@gmail.com") == martina
     assert Directory.from_registry(registry).persons[manuela].name.full == "Manuela Castaño Ruiz"
+
+
+def test_relisted_client_row_joins_the_person_on_cedula_and_contact(registry) -> None:
+    d = Directory(registry)
+    first = client_seed(
+        "CL-1", "Ana Ruiz Gómez", "111111", "ana@gmail.com", "3001111111", vinculacion="2024-01-02"
+    )
+    relisted = client_seed(
+        "PG-1", "Ana Ruiz Gómez", "111111", "ana@gmail.com", "3001111111", vinculacion="2026-10-15"
+    )
+    d.add_seeds([first, relisted], {})
+    assert len(d.persons) == 1
+    person = d.owner_of("cliente_id", "CL-1")
+    assert d.owner_of("cliente_id", "PG-1") == person
+    assert d.persons[person].attrs["vinculacion"] == "2024-01-02"
+
+
+def test_client_rows_sharing_less_than_cedula_and_contact_stay_apart(registry) -> None:
+    d = Directory(registry)
+    d.add_seeds(
+        [
+            client_seed("CL-1", "Ana Ruiz", "111111", "ana@gmail.com", "3001111111"),
+            client_seed("CL-2", "Ana Ruiz", "222222", "ana.r@gmail.com", "3002222222"),
+            client_seed("CL-3", "Luis Mora", "333333", "ana@gmail.com", "3003333333"),
+            client_seed("CL-4", "Luis Mora", "111111", "lmora@gmail.com", "3004444444"),
+        ],
+        {},
+    )
+    owners = {d.owner_of("cliente_id", f"CL-{i}") for i in range(1, 5)}
+    assert len(owners) == 4
+
+
+def test_no_person_is_created_without_an_identifier_of_its_own(registry) -> None:
+    d = Directory(registry)
+    pqr = PersonSeed("pqrs:PQR-1", "pqr_link", "")
+    pqr.add("cliente_id", "PG-1")
+    pqr.add("cedula", "111111")
+    bare_row = PersonSeed("clientes:PG-1", "client", "Ana Ruiz")
+    bare_row.add("cliente_id", "PG-1")
+    bare_row.add("cedula", "111111")
+    d.add_seeds(
+        [client_seed("CL-1", "Ana Ruiz", "111111", "ana@gmail.com", "3001111111"), pqr, bare_row],
+        {},
+    )
+    assert len(d.created) == 1
+    assert d.owner_of("cliente_id", "PG-1") == d.owner_of("cliente_id", "CL-1")

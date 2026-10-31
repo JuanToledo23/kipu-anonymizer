@@ -202,3 +202,30 @@ and the test that now covers it.
 - **Test**: `tests/test_service.py::test_output_entities_and_jobs_survive_a_restart`,
   `test_a_run_interrupted_by_a_restart_is_reported_failed`,
   `test_unexpected_pipeline_error_fails_the_job_and_keeps_the_output`.
+
+## 16. A re-listed client became a second person
+
+- **Symptom**: the Págalo migration lists 12 existing clients again as `PG-…` rows (same name,
+  cédula, email, phone). 7 of them got a new person with a second name and barrio pseudonym
+  while sharing the old person's cédula, email and phone surrogates; the other 5 landed on the
+  old person only through a PQR that named the `PG-` id.
+- **Root cause**: cannot-link forbade two `clientes` rows in one cluster, so the outcome
+  depended on which seed claimed the shared identifiers first.
+- **Fix**: two client rows sharing the cédula and an email or phone merge; the oldest row's
+  profile wins. Name-only or contact-only matches still never merge.
+- **Test**: `tests/test_identity.py::test_relisted_client_row_joins_the_person_on_cedula_and_contact`,
+  `test_client_rows_sharing_less_than_cedula_and_contact_stay_apart`,
+  `tests/test_growth_pagalo.py::test_duplicate_client_rows_are_the_old_person`.
+
+## 17. Empty persons created on every run
+
+- **Symptom**: on the grown corpus each run created 10 client persons with no identifiers and no
+  surrogates; a rerun on the same snapshot created 10 more (276 → 286).
+- **Root cause**: a cluster whose identifiers all belonged to persons already claimed in the run
+  (the split duplicates of #16) still got a new registry person, which then could attach
+  nothing and so was never found again.
+- **Fix**: a cluster that cannot hold any identifier of its own creates no person; its records
+  resolve through the owners of their identifiers.
+- **Test**: `tests/test_identity.py::test_no_person_is_created_without_an_identifier_of_its_own`,
+  `tests/test_growth_pagalo.py::test_rerun_creates_nobody_and_is_byte_identical`.
+

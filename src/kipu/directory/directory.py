@@ -65,13 +65,19 @@ class Directory:
         name = split_name(primary.full_name)
         gender = infer_gender(name.first, hint or primary.gender_hint)
         attrs: dict[str, str] = {}
-        for seed in cluster:
+        # The primary (oldest) row is applied last: a re-listed client keeps its first profile.
+        for seed in sorted(cluster, key=lambda s: s is primary):
             attrs.update({k: v for k, v in seed.attrs.items() if v})
         identifiers: dict[str, set[str]] = {}
         for seed in cluster:
             for id_type, values in seed.identifiers.items():
                 identifiers.setdefault(id_type, set()).update(values)
         person_id = self._existing_person(identifiers)
+        if person_id is None and not self._can_hold_any(identifiers):
+            # Every identifier already belongs to someone: a new person would hold nothing and
+            # be created again on every run.
+            log.warning("cluster %s has no identifier of its own; no person created", primary.key)
+            return
         if person_id is None:
             person_id = self.registry.new_person(kind, gender, name.full, attrs)
             self.created.add(person_id)
@@ -105,6 +111,16 @@ class Directory:
         if len(owners) > 1:
             log.warning("cluster maps to %d registry persons; keeping the oldest", len(owners))
         return owners[0] if owners else None
+
+    def _can_hold_any(self, identifiers: dict[str, set[str]]) -> bool:
+        return any(
+            (value := norm_identifier(id_type, raw))
+            and self.owner_of(id_type, value) is None
+            and self.registry.owner(id_type, value) is None
+            for id_type, values in identifiers.items()
+            if id_type in STORED_TYPES
+            for raw in values
+        )
 
     def _contradicts(self, person_id: str, normalized: dict[str, set[str]]) -> bool:
         for id_type in EXCLUSIVE_TYPES:

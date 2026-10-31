@@ -59,6 +59,8 @@ class Group:
 # Extra mentions for one surface, given the group, its context and the rule mentions already
 # resolved there (the LLM layer); they must not overlap the rule mentions.
 ExtraMentions = Callable[[Surface, Group, list[str], list[Mention]], list[Mention]]
+# Picks one homonym for a name no participant or identifier settles (the strong model).
+HomonymJudge = Callable[[str, tuple[str, ...], Group], str | None]
 
 
 class Detector:
@@ -78,6 +80,7 @@ class Detector:
         self.handles = handles or HandleMatcher(directory.persons.values(), kept)
         self.surrogates = surrogates or set()
         self.extra: ExtraMentions | None = None
+        self.judge: HomonymJudge | None = None
 
     def detect(self, group: Group) -> dict[tuple[str, str], list[Mention]]:
         raw = self._candidates(group)
@@ -86,7 +89,7 @@ class Detector:
         for surface in group.surfaces:
             key = (surface.record_id, surface.field)
             ours = self._surrogate_spans(surface.text)
-            assigned = (self._assign(m, raw[key], context, group.prefer) for m in raw[key])
+            assigned = (self._assign(m, raw[key], context, group) for m in raw[key])
             mentions = [m for m in assigned if m and not self._is_surrogate(m, ours)]
             mentions += self._quasi(surface, context)
             chosen = resolve_overlaps(mentions)
@@ -134,16 +137,18 @@ class Detector:
         return found
 
     def _context(self, group: Group, raw: dict[tuple[str, str], list[Mention]]) -> list[str]:
-        """Persons involved in the group, in order of strength of evidence."""
+        """Persons involved in the group, in order of strength of evidence: participants, then
+        owners of identifiers in the group, then persons named unambiguously."""
         ordered: list[str] = [p for p in group.authors.values() if p]
         if group.owner:
             ordered.append(group.owner)
+        named: list[str] = []
         for mentions in raw.values():
             for m in mentions:
                 pid = self._evidence_owner(m)
                 if pid:
-                    ordered.append(pid)
-        return list(dict.fromkeys(ordered))
+                    (named if m.label == "NAME" else ordered).append(pid)
+        return list(dict.fromkeys(ordered + named))
 
     def _evidence_owner(self, m: Mention) -> str | None:
         if m.label == "HANDLE" and len(m.candidates) > 1:
@@ -163,7 +168,7 @@ class Detector:
         return kind_ok[0] if kind_ok else None
 
     def _assign(
-        self, m: Mention, siblings: list[Mention], context: list[str], prefer: str
+        self, m: Mention, siblings: list[Mention], context: list[str], group: Group
     ) -> Mention | None:
         if m.label == "RECORD_KEY":
             return None
@@ -185,7 +190,8 @@ class Detector:
         )
         chosen = (
             _choose(m.candidates, [p for _, p in nearby], context)
-            or self._preferred(m.candidates, prefer)
+            or self._judged(m, group)
+            or self._preferred(m.candidates, group.prefer)
             or (m.candidates[0] if m.candidates else None)
         )
         if m.kind in WEAK_NAME_KINDS and chosen not in context:
@@ -193,6 +199,11 @@ class Detector:
             if chosen is None:
                 return None
         return m.with_person(chosen)
+
+    def _judged(self, m: Mention, group: Group) -> str | None:
+        if self.judge is None or m.kind not in STRONG_NAME_KINDS or len(m.candidates) < 2:
+            return None
+        return self.judge(m.text, m.candidates, group)
 
     def _surrogate_spans(self, text: str) -> list[tuple[int, int]]:
         """Spans of surrogate names we wrote earlier (an input copied from our output)."""

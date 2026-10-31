@@ -211,6 +211,7 @@ class LLMLayer:
                 self._judge if judge else None,
             )
             hooks.append(hook)
+            anonymizer.detector.judge = hook.judge_homonym
             return hook
 
         return factory

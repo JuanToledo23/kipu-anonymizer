@@ -41,11 +41,20 @@
 ## How consistency is kept
 
 - One person = one cluster of seeds joined by strong keys (cédula, email, phone, uid, CL/KP ids)
-  with cannot-link on different cédulas or two rows of the same master. Chat users without keys
-  join a master row by unique name; homonyms are split by Slack username = email local part,
-  then by identifiers in their own messages.
+  with cannot-link on different cédulas or two rows of the same master. The one exception: two
+  `clientes` rows sharing the cédula and an email or phone are one person listed twice (the
+  Págalo migration re-listed 12 clients as `PG-…`); a shared name, email or phone alone never
+  merges. The oldest row keeps the profile, so both rows render the same name, barrio and
+  surrogates. Chat users without keys join a master row by unique name; homonyms are split by
+  Slack username = email local part, then by identifiers in their own messages.
+- A uid is a strong key: an old user whose `real_name` was later shortened keeps its person even
+  when the short form now equals a new person's name.
+- No person is created that cannot hold at least one identifier of its own: such a cluster is
+  someone already known, and creating it would add an empty person on every run.
 - Mentions of homonyms are resolved by the nearest evidence (CL id, radicado, cédula, email),
-  then thread context, then source (employee in `empleados` and docs, client in client tables).
+  then thread participants, then the owners of identifiers elsewhere in the thread, then persons
+  named unambiguously there; with none of those, the strong model judges on evidence in the text
+  (LLM runs), else source decides (employee in `empleados` and docs, client in client tables).
 - `person_id` and every surrogate live in `$DATA_DIR/registry.sqlite`; surrogates are seeded by
   HMAC(secret, person_id|field|original|counter) and reserved with UNIQUE constraints, and they
   never reproduce a real name or identifier value.

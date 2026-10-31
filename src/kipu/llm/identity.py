@@ -136,7 +136,7 @@ class LLMMentions:
         if len(strong) == 1:
             return strong[0], "llm_full"
         if strong:
-            chosen = next((p for p in context if p in strong), None) or self._judge(
+            chosen = next((p for p in context if p in strong), None) or self.judge_homonym(
                 span.text, strong, group
             )
             key = "" if chosen else f"homonym:{group.scope}"
@@ -171,7 +171,9 @@ class LLMMentions:
             self.created.add(person.person_id)
         return person.person_id
 
-    def _judge(self, name: str, candidates: list[str], group: Group) -> str | None:
+    def judge_homonym(
+        self, name: str, candidates: list[str] | tuple[str, ...], group: Group
+    ) -> str | None:
         """The strong model picks a homonym only on evidence present in the text, which the
         code checks; no evidence at all means no call."""
         if self.judge is None:
@@ -180,7 +182,7 @@ class LLMMentions:
         evidence = {p: present_evidence(self.directory.persons[p], text) for p in candidates}
         if not any(evidence.values()):
             return None
-        return self.judge(name, candidates, text, evidence)
+        return self.judge(name, list(candidates), text, evidence)
 
 
 def present_evidence(person: Person, text: str) -> list[str]:

@@ -24,7 +24,8 @@ class UnionFind:
         return i
 
     def cannot_link(self, a: int, b: int) -> bool:
-        """Two clusters cannot merge if they hold different cédulas or two rows of one master."""
+        """Two clusters cannot merge if they hold different cédulas or two rows of one master,
+        except two client rows of one person (a migrated portfolio re-lists existing clients)."""
         ma, mb = self.members[a], self.members[b]
         ced_a = {v for i in ma for t, v in self.seeds[i].norm_ids(("cedula",))}
         ced_b = {v for i in mb for t, v in self.seeds[i].norm_ids(("cedula",))}
@@ -34,8 +35,26 @@ class UnionFind:
             if any(self.seeds[i].kind == kind for i in ma) and any(
                 self.seeds[i].kind == kind for i in mb
             ):
+                if kind == "client" and self._same_client(ma, mb):
+                    continue
                 return True
         return False
+
+    def _same_client(self, ma: list[int], mb: list[int]) -> bool:
+        """Client rows that share the cédula and an email or phone: a shared name, email or
+        phone alone is not enough."""
+        ids_a = self._client_ids(ma)
+        ids_b = self._client_ids(mb)
+        shared = {t for t, _ in ids_a & ids_b}
+        return "cedula" in shared and bool(shared & {"email", "phone"})
+
+    def _client_ids(self, members: list[int]) -> set[tuple[str, str]]:
+        return {
+            key
+            for i in members
+            if self.seeds[i].kind == "client"
+            for key in self.seeds[i].norm_ids(("cedula", "email", "phone"))
+        }
 
     def union(self, a: int, b: int) -> bool:
         ra, rb = self.find(a), self.find(b)
@@ -88,13 +107,15 @@ def _join_pass(uf: UnionFind, texts_by_uid: dict[str, str]) -> bool:
         target_kind = targets.get(seed.kind)
         if not target_kind or _cluster_has(uf, i, target_kind):
             continue
-        candidates = [
-            j
-            for j, other in enumerate(uf.seeds)
-            if other.kind == target_kind
-            and fold(seed.full_name) in _name_keys(other.full_name)
-            and not _cluster_has(uf, j, seed.kind)
-        ]
+        roots: dict[int, int] = {}  # one candidate per cluster: re-listed clients share one
+        for j, other in enumerate(uf.seeds):
+            if (
+                other.kind == target_kind
+                and fold(seed.full_name) in _name_keys(other.full_name)
+                and not _cluster_has(uf, j, seed.kind)
+            ):
+                roots.setdefault(uf.find(j), j)
+        candidates = list(roots.values())
         if len(candidates) > 1:
             candidates = _disambiguate(uf, seed, candidates, texts_by_uid)
         if len(candidates) == 1 and uf.union(candidates[0], i):

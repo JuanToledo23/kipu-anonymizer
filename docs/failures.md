@@ -229,3 +229,14 @@ and the test that now covers it.
 - **Test**: `tests/test_identity.py::test_no_person_is_created_without_an_identifier_of_its_own`,
   `tests/test_growth_pagalo.py::test_rerun_creates_nobody_and_is_byte_identical`.
 
+## 18. A Págalo client id declared as an account number
+
+- **Symptom**: the first LLM run on the grown corpus wrote `Cliente PG-3773` in a PDF and a chat
+  reply `PG-3773` as account surrogates; the id became a declared original of its person, so
+  every transacciones row that keeps `cliente_id` was an audit leak (38 records).
+- **Root cause**: record keys were hardcoded as `CL-`, `KP-`, `TX-`, `PQR-`; the new `PG-` prefix
+  passed the verifier's account shape check and was not evidence for the rules either.
+- **Fix**: `PG-` ids are record keys (cliente_id) for the rules and are never accounts for the
+  verifier.
+- **Test**: `tests/test_llm_verify.py::test_record_ids_are_never_accounts`,
+  `tests/test_render.py::test_pagalo_client_id_in_text_is_evidence_for_the_homonym`.

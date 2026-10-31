@@ -1,5 +1,6 @@
-from conftest import SECRET
+from conftest import SECRET, client_seed
 from kipu.anonymizer import Anonymizer
+from kipu.directory.directory import Directory
 from kipu.ingest.records import Attachment, ChatRecord, TableRecord
 from kipu.replace.render import fit_digits, format_date, spell_email
 
@@ -100,3 +101,22 @@ def test_homonyms_split_by_nearby_client_id(registry, directory) -> None:
     for record, key in zip(out, ("CL-12538", "CL-57176"), strict=True):
         person = directory.persons[directory.owner_of("cliente_id", key)]
         assert anonymizer.factory.name(person).short in record["text"]
+
+
+def test_pagalo_client_id_in_text_is_evidence_for_the_homonym(registry) -> None:
+    directory = Directory(registry)
+    directory.add_seeds(
+        [
+            client_seed(
+                "CL-1001", "Camila Arango Velásquez", "111111", "ca@gmail.com", "3001111111"
+            ),
+            client_seed("PG-2002", "Camila Arango Mejía", "222222", "cam@gmail.com", "3002222222"),
+        ],
+        {},
+    )
+    anonymizer = Anonymizer(registry, directory, SECRET)
+    record = chat("1", "Caso PG-2002: Camila Arango pide el extracto.", author="Kipi")
+    anonymizer.chats([record])
+    name = next(m for m in anonymizer.spans[("1", "text")] if m.text == "Camila Arango")
+    assert name.person_id == directory.owner_of("cliente_id", "PG-2002")
+    assert "PG-2002" in anonymizer.chats([record])[0]["text"]

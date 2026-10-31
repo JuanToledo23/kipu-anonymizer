@@ -27,8 +27,9 @@ ID_TYPES = {
     "HANDLE": "handle",
     "ACCOUNT": "account",
 }
-RECORD_KEY = re.compile(r"\b(CL-\d{4,6}|KP-\d{3}|PQR-\d{4}-\d{4})\b")
-RECORD_KEY_TYPES = {"CL-": "cliente_id", "KP-": "kp_id", "PQR": "radicado"}
+# PG-: clients migrated from the Págalo portfolio keep their Págalo id.
+RECORD_KEY = re.compile(r"\b((?:CL|PG)-\d{4,6}|KP-\d{3}|PQR-\d{4}-\d{4})\b")
+RECORD_KEY_TYPES = {"CL-": "cliente_id", "PG-": "cliente_id", "KP-": "kp_id", "PQR": "radicado"}
 STRONG_NAME_KINDS = ("full", "short", "handle")
 LINKING_KINDS = ("full", "short", "external", "llm_full")
 MAX_LINK_GAP = 40

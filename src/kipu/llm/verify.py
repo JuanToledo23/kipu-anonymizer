@@ -49,7 +49,7 @@ MONTHS = {
 BIRTH_WORDS = re.compile(r"(\d{1,2})\s+de\s+([a-z]+)\s+(?:de|del)\s+(\d{4})")
 AGE_NUMBER = re.compile(r"\b(\d{1,3})\b")
 EMAIL_PLAIN = re.compile(r"[a-z0-9._%+\-]+@[a-z0-9\-]+(?:\.[a-z0-9\-]+)+")
-RECORD_CODE = re.compile(r"\b(?:CL|KP|TX|PQR)-\d", re.I)
+RECORD_CODE = re.compile(r"\b(?:CL|PG|KP|TX|PQR)-\d", re.I)
 NOT_PERSONS = frozenset({"kipi", "kipu", "kipu pay"})
 TITLES = frozenset(
     {

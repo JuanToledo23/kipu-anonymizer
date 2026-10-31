@@ -6,7 +6,7 @@ from tests.llm_fakes import PRIMARY, SECOND, STRONG, FakeProviders, client, run
 
 from kipu.anonymizer import Anonymizer
 from kipu.llm.extract import Candidate, Item, Target, Unit
-from kipu.llm.verify import Dispute, Span, Verifier, adjudicate, by_surface
+from kipu.llm.verify import Dispute, Span, Verifier, adjudicate, by_surface, valid_shape
 
 
 def unit(*texts: str) -> Unit:
@@ -77,3 +77,9 @@ def test_titles_are_not_persons(anonymizer: Anonymizer) -> None:
         unit("Señor\nYeferson Mora"), {PRIMARY: [Candidate(0, "Señor", "PERSON")]}
     )
     assert accepted == [] and disputed == []
+
+
+def test_record_ids_are_never_accounts() -> None:
+    for code in ("PG-3773", "CL-15468", "TX-006080", "Cliente PG-3773"):
+        assert not valid_shape(Candidate(0, code, "ACCOUNT"))
+    assert valid_shape(Candidate(0, "4567-1234-9988", "ACCOUNT"))

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Systems Design — Vende los datos sin vender a la gente</title>
+<style>
+  :root { --ink:#1b1f24; --muted:#5b6470; --line:#e3e6ea; --bg:#fafbfc; --card:#fff; --accent:#0f6b4f; --accent2:#e8f3ee; --warn:#8a4b00; --warn2:#fff4e5; --blue:#1d4ed8; --blue2:#e8eefc; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family: -apple-system, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif; color:var(--ink); background:var(--bg); line-height:1.45; }
+  main { max-width: 1040px; margin: 0 auto; padding: 36px 24px 60px; }
+  h1 { font-size: 28px; margin: 0 0 4px; letter-spacing:-0.01em; }
+  .sub { color:var(--muted); margin:0 0 22px; font-size:15px; }
+  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 34px 0 12px; }
+  p { margin: 0 0 10px; }
+  .lead { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px 20px; font-size:16px; }
+  .lead b { color:var(--accent); }
+  .three { display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; }
+  .pill { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .pill .n { font-size:26px; font-weight:700; color:var(--accent); }
+  .pill .t { font-weight:600; margin-top:2px; }
+  .pill .d { color:var(--muted); font-size:14px; margin-top:4px; }
+  .flow { display:flex; flex-direction:column; gap:0; }
+  .step { display:grid; grid-template-columns: 56px 1fr; gap:14px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .step .num { width:40px; height:40px; border-radius:50%; background:var(--accent); color:#fff; font-weight:700; display:flex; align-items:center; justify-content:center; font-size:17px; }
+  .step h3 { margin:0 0 4px; font-size:17px; }
+  .step .what { margin:0 0 6px; }
+  .step .why { margin:0; color:var(--muted); font-size:14px; }
+  .step .why.how { margin-top:4px; }
+  .step .why b { color:var(--ink); font-weight:600; }
+  .arrow { text-align:center; color:#b3bac3; font-size:20px; line-height:1; padding:4px 0; }
+  .tag { display:inline-block; font-size:12px; padding:2px 8px; border-radius:999px; background:var(--accent2); color:var(--accent); font-weight:600; margin-left:6px; vertical-align:middle; }
+  .tag.ai { background:var(--blue2); color:var(--blue); }
+  .side { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+  .box { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .box h3 { margin:0 0 8px; font-size:16px; }
+  .box ul { margin:0; padding-left:18px; }
+  .box li { margin:4px 0; }
+  .box.warn { background:var(--warn2); border-color:#f3dcbf; }
+  .box.warn h3 { color:var(--warn); }
+  .principle { border-left:4px solid var(--accent); padding:10px 14px; background:var(--accent2); border-radius:8px; margin: 14px 0 0; font-size:15px; }
+  .stack { color:var(--muted); margin:-14px 0 22px; font-size:14px; }
+  .stack b { color:var(--ink); font-weight:600; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 6px; }
+  .box .chips { margin:0 0 10px; }
+  .chip { font-size:12px; background:#f1f3f5; color:#5b6470; border-radius:999px; padding:2px 8px; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; background:#f1f3f5; padding:1px 5px; border-radius:4px; }
+  .diagram { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; max-width:1000px; }
+  .diagram svg { display:block; width:100%; height:auto; font-family: -apple-system, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif; }
+  .diagram .nd { fill:#fff; stroke:var(--line); stroke-width:1.5; }
+  .diagram .mod { fill:#fff; stroke:var(--accent); stroke-width:1.5; }
+  .diagram .t { font-size:13px; font-weight:600; fill:var(--ink); }
+  .diagram .s { font-size:11px; fill:var(--muted); }
+  .diagram .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; fill:var(--ink); }
+  .diagram .tech { font-size:10px; fill:#5b6470; }
+  .diagram .num { font-size:11px; font-weight:700; fill:#fff; }
+  .diagram .flowl { stroke:#8a939e; stroke-width:1.5; fill:none; }
+  .diagram .ail { stroke:var(--blue); stroke-width:1.3; stroke-dasharray:5 4; fill:none; }
+  .diagram .back { stroke:var(--warn); stroke-width:1.5; stroke-dasharray:6 4; fill:none; }
+  .diagram .disk { stroke:#8a939e; stroke-width:1.2; stroke-dasharray:3 3; fill:none; }
+  @media (max-width: 760px) { .three, .side { grid-template-columns: 1fr; } main { padding: 24px 16px 40px; } }
+  @page { size: A4; margin: 14mm; }
+  @media print { body { background:#fff; } main { padding:0; max-width:none; } .step, .box, .pill, .lead, .diagram { break-inside: avoid; } h2 { break-after: avoid; } .side { grid-template-columns: 1fr 1fr; } .three { grid-template-columns: repeat(3, 1fr); } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Vende los datos sin vender a la gente</h1>
+  <p class="sub">Systems design · Juan Toledo · 31 oct 2026</p>
+  <p class="stack"><b>Stack:</b> Python 3.13 · FastAPI · SQLite · Docker · Fly.io · OpenRouter (Claude + Gemini)</p>
+
+  <div class="lead">
+    <p><b>Qué resolvemos.</b> Kipu Pay quiere vender sus chats, documentos y tablas de soporte para entrenar un chatbot. Entregamos la misma información con cada persona real cambiada por una identidad inventada, creíble y consistente. Sin fugas, sin reescribir el texto, y sin cambiar seudónimos cuando lleguen datos nuevos.</p>
+    <p style="margin:0"><b>Cómo lo entregamos.</b> Un servicio HTTP que regenera la salida y anonimiza registros nuevos en vivo. El diccionario de quién es quién nunca sale del servidor.</p>
+  </div>
+
+  <p class="principle"><b>Principio de diseño:</b> la IA propone, el código decide, ejecuta y verifica.</p>
+
+  <h2>Diagrama</h2>
+  <div class="diagram">
+    <svg viewBox="0 0 1000 482" role="img" aria-label="Arquitectura: API de fuentes, siete módulos en secuencia, modelos de IA, registro en disco, salida y servicio HTTP">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a939e"/></marker>
+        <marker id="ahw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a4b00"/></marker>
+      </defs>
+
+      <!-- Servicio HTTP + vigilante (arriba a la derecha) -->
+      <rect class="nd" x="560" y="12" width="240" height="104" rx="12"/>
+      <text class="t" x="576" y="36">Servicio HTTP /v1</text>
+      <text class="mono" x="576" y="58">/health · /run · /output</text>
+      <text class="mono" x="576" y="76">/anonymize · /entities</text>
+      <text class="s" x="576" y="100">regenera y sirve la salida</text>
+      <rect class="nd" x="816" y="12" width="174" height="64" rx="12"/>
+      <text class="t" x="832" y="38">Vigilante de fuentes</text>
+      <text class="s" x="832" y="58">avisa si las fuentes crecen</text>
+
+      <!-- API de fuentes -->
+      <rect class="nd" x="10" y="175" width="146" height="80" rx="12"/>
+      <text class="t" x="24" y="208">API de fuentes</text>
+      <text class="s" x="24" y="228">chats · docs · tablas</text>
+      <line class="flowl" x1="156" y1="215" x2="178" y2="215" marker-end="url(#ah)"/>
+
+      <!-- Bus de IA -->
+      <path class="ail" d="M920,175 V150 H409 V175"/>
+      <path class="ail" d="M503,150 V175 M597,150 V175 M785,150 V175"/>
+      <rect class="nd" x="850" y="175" width="140" height="80" rx="12" style="stroke:#1d4ed8"/>
+      <text class="t" x="866" y="208" style="fill:#1d4ed8">Modelos de IA</text>
+      <text class="s" x="866" y="228">Claude + Gemini</text>
+
+      <!-- Módulos 1–7 -->
+      <g>
+        <rect class="mod" x="180" y="175" width="82" height="80" rx="12"/>
+        <circle cx="198" cy="193" r="10" fill="#0f6b4f"/><text class="num" x="198" y="197" text-anchor="middle">1</text>
+        <text class="t" x="221" y="230" text-anchor="middle">Ingesta</text>
+
+        <rect class="mod" x="274" y="175" width="82" height="80" rx="12"/>
+        <circle cx="292" cy="193" r="10" fill="#0f6b4f"/><text class="num" x="292" y="197" text-anchor="middle">2</text>
+        <text class="t" x="315" y="225" text-anchor="middle">Directorio</text>
+        <text class="s" x="315" y="241" text-anchor="middle">de personas</text>
+
+        <rect class="mod" x="368" y="175" width="82" height="80" rx="12"/>
+        <circle cx="386" cy="193" r="10" fill="#0f6b4f"/><text class="num" x="386" y="197" text-anchor="middle">3</text>
+        <text class="t" x="409" y="225" text-anchor="middle">Detector</text>
+        <text class="s" x="409" y="241" text-anchor="middle">reglas + IA</text>
+
+        <rect class="mod" x="462" y="175" width="82" height="80" rx="12"/>
+        <circle cx="480" cy="193" r="10" fill="#0f6b4f"/><text class="num" x="480" y="197" text-anchor="middle">4</text>
+        <text class="t" x="503" y="230" text-anchor="middle">Identidad</text>
+
+        <rect class="mod" x="556" y="175" width="82" height="80" rx="12"/>
+        <circle cx="574" cy="193" r="10" fill="#0f6b4f"/><text class="num" x="574" y="197" text-anchor="middle">5</text>
+        <text class="t" x="597" y="230" text-anchor="middle" style="font-size:11.5px">Seudónimos</text>
+
+        <rect class="mod" x="650" y="175" width="82" height="80" rx="12"/>
+        <circle cx="668" cy="193" r="10" fill="#0f6b4f"/><text class="num" x="668" y="197" text-anchor="middle">6</text>
+        <text class="t" x="691" y="230" text-anchor="middle">Reemplazo</text>
+
+        <rect class="mod" x="744" y="175" width="82" height="80" rx="12"/>
+        <circle cx="762" cy="193" r="10" fill="#0f6b4f"/><text class="num" x="762" y="197" text-anchor="middle">7</text>
+        <text class="t" x="785" y="230" text-anchor="middle">Auditor</text>
+      </g>
+
+      <!-- Etiquetas IA (3, 4, 5, 7) -->
+      <g font-size="10" font-weight="700" fill="#1d4ed8" text-anchor="middle">
+        <rect x="430" y="185" width="16" height="13" rx="6.5" fill="#e8eefc"/><text x="438" y="195">IA</text>
+        <rect x="524" y="185" width="16" height="13" rx="6.5" fill="#e8eefc"/><text x="532" y="195">IA</text>
+        <rect x="618" y="185" width="16" height="13" rx="6.5" fill="#e8eefc"/><text x="626" y="195">IA</text>
+        <rect x="806" y="185" width="16" height="13" rx="6.5" fill="#e8eefc"/><text x="814" y="195">IA</text>
+      </g>
+
+      <!-- Flechas entre módulos -->
+      <line class="flowl" x1="262" y1="215" x2="272" y2="215" marker-end="url(#ah)"/>
+      <line class="flowl" x1="356" y1="215" x2="366" y2="215" marker-end="url(#ah)"/>
+      <line class="flowl" x1="450" y1="215" x2="460" y2="215" marker-end="url(#ah)"/>
+      <line class="flowl" x1="544" y1="215" x2="554" y2="215" marker-end="url(#ah)"/>
+      <line class="flowl" x1="638" y1="215" x2="648" y2="215" marker-end="url(#ah)"/>
+      <line class="flowl" x1="732" y1="215" x2="742" y2="215" marker-end="url(#ah)"/>
+
+      <!-- Retorno 7 → 3 -->
+      <path class="back" d="M765,276 V300 H395 V280" marker-end="url(#ahw)"/>
+      <rect x="520" y="291" width="120" height="18" fill="#fff"/>
+      <text x="580" y="304" text-anchor="middle" font-size="11" font-weight="600" fill="#8a4b00">fuga → reprocesar</text>
+
+      <!-- Registro en disco + /anonymize en vivo -->
+      <path class="disk" d="M315,276 V368 M503,276 V368 M597,276 V368"/>
+      <rect class="nd" x="300" y="370" width="340" height="84" rx="12"/>
+      <text class="t" x="316" y="398">Registro en disco</text>
+      <text class="s" x="316" y="420">personas · seudónimos ·</text>
+      <text class="s" x="316" y="436">formas vistas · journal</text>
+      <rect class="nd" x="150" y="370" width="126" height="84" rx="12"/>
+      <text class="mono" x="213" y="404" text-anchor="middle" style="font-weight:600">/anonymize</text>
+      <text class="s" x="213" y="424" text-anchor="middle">en vivo</text>
+      <line class="flowl" x1="280" y1="412" x2="296" y2="412" marker-start="url(#ah)" marker-end="url(#ah)"/>
+
+      <!-- output/ -->
+      <path class="flowl" d="M785,276 V366" marker-end="url(#ah)"/>
+      <rect class="nd" x="700" y="370" width="290" height="84" rx="12" style="stroke:#0f6b4f"/>
+      <text class="t" x="716" y="398" style="fill:#0f6b4f">output/</text>
+      <text class="s" x="716" y="420">chats · docs · tables · entities</text>
+      <text class="s" x="716" y="436">solo tras auditoría limpia</text>
+      <!-- Tecnología bajo cada caja -->
+      <g class="tech" text-anchor="middle">
+        <text class="tech" x="83" y="268">httpx</text>
+        <text class="tech" x="221" y="268">PyMuPDF · lxml</text>
+        <text class="tech" x="315" y="268">SQLite</text>
+        <text class="tech" x="409" y="268">regex · LLM</text>
+        <text class="tech" x="503" y="268">union-find</text>
+        <text class="tech" x="597" y="268">HMAC · SQLite</text>
+        <text class="tech" x="691" y="268">Python</text>
+        <text class="tech" x="785" y="268">regex · hashlib</text>
+        <text class="tech" x="920" y="268">OpenRouter</text>
+        <text class="tech" x="680" y="129">FastAPI</text>
+        <text class="tech" x="903" y="89">Python</text>
+        <text class="tech" x="470" y="467">SQLite</text>
+        <text class="tech" x="213" y="467">FastAPI</text>
+        <text class="tech" x="845" y="467">Python</text>
+      </g>
+    </svg>
+  </div>
+
+  <h2>Arquitectura — el pipeline en 7 módulos</h2>
+  <div class="flow">
+
+    <div class="step"><div class="num">1</div><div>
+      <h3>Ingesta <span class="tag">código</span></h3>
+      <div class="chips"><span class="chip">httpx</span><span class="chip">PyMuPDF (PDF)</span><span class="chip">lxml (HTML/XML)</span><span class="chip">csv Latin-1</span><span class="chip">Pydantic</span></div>
+      <p class="what">Descarga chats, documentos y tablas del API y los lee completos, incluidos metadata, comentarios y nombres de archivo.</p>
+      <p class="why"><b>Por qué existe:</b> los datos personales también se esconden en los rincones.</p>
+      <p class="why how"><b>Cómo:</b> un cliente del API baja cada fuente; un lector por formato convierte todo al mismo esquema de registro (id, texto, metadata, adjuntos) y guarda una copia cruda en disco.</p>
+    </div></div>
+    <div class="arrow">↓</div>
+
+    <div class="step"><div class="num">2</div><div>
+      <h3>Directorio de personas <span class="tag">código</span></h3>
+      <div class="chips"><span class="chip">Python</span><span class="chip">SQLite</span></div>
+      <p class="what">Arma la lista de quién existe desde las tablas maestras y Slack, y le da a cada persona un id interno fijo.</p>
+      <p class="why"><b>Por qué existe:</b> las tablas dicen quién es quién con certeza; el texto solo permite adivinar.</p>
+      <p class="why how"><b>Cómo:</b> lee clientes, empleados y usuarios de Slack; crea una persona por fila con todos sus identificadores y su jefe directo; le asigna un id interno que se guarda en SQLite.</p>
+    </div></div>
+    <div class="arrow">↓</div>
+
+    <div class="step"><div class="num">3</div><div>
+      <h3>Detector <span class="tag">código</span><span class="tag ai">IA</span></h3>
+      <div class="chips"><span class="chip">regex</span><span class="chip">validadores propios</span><span class="chip">OpenRouter: Claude + Gemini</span><span class="chip">json_schema</span></div>
+      <p class="what">Encuentra cada dato personal: reglas para lo que tiene formato, IA para nombres en texto libre. Solo se acepta lo que aparece literal.</p>
+      <p class="why"><b>Por qué existe:</b> solo reglas se pierden nombres; solo IA inventa y borra de más.</p>
+      <p class="why how"><b>Cómo:</b> primero corren las reglas sobre cada texto; luego el texto va a los modelos de IA, que devuelven las menciones exactas que encontraron; el código verifica que cada mención exista literal y descarta lo que está en la lista de conservados.</p>
+    </div></div>
+    <div class="arrow">↓</div>
+
+    <div class="step"><div class="num">4</div><div>
+      <h3>Identidad <span class="tag">código</span><span class="tag ai">IA</span></h3>
+      <div class="chips"><span class="chip">union-find (Python)</span><span class="chip">SQLite</span><span class="chip">Claude (adjudicador)</span></div>
+      <p class="what">Decide a qué persona pertenece cada mención usando evidencia fuerte; la IA solo desempata y el código verifica su evidencia.</p>
+      <p class="why"><b>Por qué existe:</b> fundir dos personas en una, o partir una en dos, rompe el dataset.</p>
+      <p class="why how"><b>Cómo:</b> cada mención se une a una persona si comparte un dato fuerte; si solo coincide el nombre, se mantiene aparte; en los casos ambiguos un modelo de IA elige entre candidatos citando evidencia que el código comprueba.</p>
+    </div></div>
+    <div class="arrow">↓</div>
+
+    <div class="step"><div class="num">5</div><div>
+      <h3>Seudónimos <span class="tag">código</span><span class="tag ai">IA</span></h3>
+      <div class="chips"><span class="chip">HMAC-SHA256</span><span class="chip">listas de nombres CO</span><span class="chip">SQLite UNIQUE</span><span class="chip">Claude (género/sector)</span></div>
+      <p class="what">Genera para cada persona una identidad falsa, creíble y determinista, y la guarda en un registro en disco.</p>
+      <p class="why"><b>Por qué existe:</b> la misma persona debe recibir el mismo seudónimo hoy, en vivo y mañana.</p>
+      <p class="why how"><b>Cómo:</b> a partir del id interno y un secreto se genera una semilla; con ella se eligen nombre, cédula, correo, celular y dirección de listas y generadores propios; se reservan en SQLite para que sean únicos y estables.</p>
+    </div></div>
+    <div class="arrow">↓</div>
+
+    <div class="step"><div class="num">6</div><div>
+      <h3>Reemplazo y generalización <span class="tag">código</span><span class="tag ai">IA</span></h3>
+      <div class="chips"><span class="chip">Python</span><span class="chip">unicodedata</span></div>
+      <p class="what">Sustituye solo los fragmentos detectados respetando su forma, y generaliza lo que identifica sin nombrar.</p>
+      <p class="why"><b>Por qué existe:</b> el valor está en el texto original; reescribirlo lo altera.</p>
+      <p class="why how"><b>Cómo:</b> se sustituye cada mención por su seudónimo en la posición exacta, copiando la forma original (mayúsculas, sin tildes); ocupación, barrio y año se cambian por su versión general.</p>
+    </div></div>
+    <div class="arrow">↓</div>
+
+    <div class="step"><div class="num">7</div><div>
+      <h3>Auditor independiente <span class="tag">código</span><span class="tag ai">IA</span></h3>
+      <div class="chips"><span class="chip">regex</span><span class="chip">unicodedata + confusables</span><span class="chip">hashlib</span><span class="chip">Claude (pasada final)</span></div>
+      <p class="what">Busca cada dato original en toda la salida; si encuentra una fuga, reprocesa ese registro y vuelve a auditar hasta cero.</p>
+      <p class="why"><b>Por qué existe:</b> una sola fuga invalida el dataset; nada sale sin verificación.</p>
+      <p class="why how"><b>Cómo:</b> normaliza toda la salida y busca cada dato original y sus hashes; una pasada de IA busca personas que las reglas no conocían; cualquier hallazgo vuelve al detector; al terminar arma el diccionario con lo que realmente encontró.</p>
+    </div></div>
+  </div>
+
+</main>
+</body>
+</html>

@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from kipu.anonymizer import Anonymizer
 from kipu.directory.directory import Directory
 from kipu.directory.registry import Registry
 from kipu.directory.seed import PersonSeed
@@ -71,3 +72,8 @@ def directory(registry: Registry) -> Directory:
     ]
     d.add_seeds(seeds, {})
     return d
+
+
+@pytest.fixture
+def anonymizer(registry: Registry, directory: Directory) -> Anonymizer:
+    return Anonymizer(registry, directory, SECRET)

@@ -1,0 +1,280 @@
+openapi: 3.1.0
+info:
+  title: Reto PII - API de fuentes
+  version: 1.0.0
+  description: |
+    Entrega las fuentes del reto "Vende los datos sin vender a la gente" a cada equipo. La URL de tu servicio se
+    registra y se valida en /evento/reto de Frontier.
+    Autenticación: cabecera `Authorization: Bearer <tu token>`. Cada token identifica a una persona;
+    todas las llamadas quedan en el log de accesos. Límite: 600 peticiones por minuto por token.
+    Las respuestas binarias (PDF, CSV Latin-1, XML) viajan tal cual, con su Content-Type y charset reales:
+    no se recodifican. Los JSON llevan ETag; manda If-None-Match y recibes 304 si nada cambió.
+servers:
+  - url: https://reto-pii-fuentes-production.up.railway.app/v1
+    description: el día del reto
+security:
+  - bearer: []
+tags:
+  - name: chats
+  - name: docs
+  - name: tables
+  - name: reto
+paths:
+  /chats/channels:
+    get:
+      tags: [chats]
+      summary: Canales del export (channels.json)
+      responses:
+        '200':
+          description: Lista de canales con id, name, purpose, members (uids)
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Channel' } }
+  /chats/users:
+    get:
+      tags: [chats]
+      summary: Usuarios del export (users.json)
+      description: |
+        Perfiles parciales. Los clientes no traen customer_id ni celular y solo algunos traen correo;
+        los empleados traen correo y cargo. No es un diccionario uid -> fila del maestro.
+      responses:
+        '200':
+          description: Lista de usuarios
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/User' } }
+  /chats/{canal}:
+    get:
+      tags: [chats]
+      summary: Fechas con mensajes en un canal
+      parameters:
+        - {
+            name: canal,
+            in: path,
+            required: true,
+            schema: { type: string },
+            example: soporte-cobros,
+          }
+      responses:
+        '200':
+          description: Fechas (YYYY-MM-DD) ordenadas
+          content:
+            application/json:
+              schema: { type: array, items: { type: string, format: date } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /chats/{canal}/{fecha}:
+    get:
+      tags: [chats]
+      summary: Mensajes de un canal en una fecha (export estilo Slack)
+      parameters:
+        - { name: canal, in: path, required: true, schema: { type: string } }
+        - {
+            name: fecha,
+            in: path,
+            required: true,
+            schema: { type: string, format: date },
+            example: '2026-09-14',
+          }
+      responses:
+        '200':
+          description: Lista de mensajes tal como los exporta Slack
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/SlackMessage' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /docs:
+    get:
+      tags: [docs]
+      summary: Índice de documentos (index.json)
+      responses:
+        '200':
+          description: id, filename y format de cada documento
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, filename, format]
+                  properties:
+                    id: { type: string, example: doc_01 }
+                    filename: { type: string, example: organigrama_2026.html }
+                    format: { type: string, enum: [pdf, html, md] }
+  /docs/{id}:
+    get:
+      tags: [docs]
+      summary: Descarga el archivo original del documento
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string }, example: doc_02 }
+      responses:
+        '200':
+          description: El archivo tal cual (PDF binario, HTML o Markdown en UTF-8)
+          headers:
+            Content-Disposition:
+              {
+                schema: { type: string },
+                example: 'attachment; filename="politica_cobranza_v3.pdf"',
+              }
+          content:
+            application/pdf: { schema: { type: string, format: binary } }
+            text/html; charset=utf-8: { schema: { type: string } }
+            text/markdown; charset=utf-8: { schema: { type: string } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /tables:
+    get:
+      tags: [tables]
+      summary: Tablas disponibles con su codificación
+      responses:
+        '200':
+          description: nombre, formato y charset de cada tabla
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name: { type: string, example: clientes.csv }
+                    format: { type: string, enum: [csv, xml] }
+                    charset: { type: string, example: latin-1 }
+                    separator: { type: string, example: ';' }
+                    rows: { type: integer }
+  /tables/{nombre}:
+    get:
+      tags: [tables]
+      summary: Descarga una tabla tal cual sale del sistema
+      description: clientes.csv viene en Latin-1 con separador ';'; transacciones.csv en UTF-8 con ','; pqrs.xml y empleados.xml en UTF-8.
+      parameters:
+        - {
+            name: nombre,
+            in: path,
+            required: true,
+            schema:
+              { type: string, enum: [clientes.csv, transacciones.csv, pqrs.xml, empleados.xml] },
+          }
+      responses:
+        '200':
+          description: Bytes originales con el charset declarado en Content-Type
+          content:
+            text/csv; charset=iso-8859-1: { schema: { type: string } }
+            text/csv; charset=utf-8: { schema: { type: string } }
+            application/xml; charset=utf-8: { schema: { type: string } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /record_index:
+    get:
+      tags: [reto]
+      summary: Todos los ids que la salida debe contener, por fuente
+      responses:
+        '200':
+          description: '{chats: [...], docs: [...], tables: [...]}'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chats: { type: array, items: { type: string } }
+                  docs: { type: array, items: { type: string } }
+                  tables: { type: array, items: { type: string } }
+  /tests/public:
+    get:
+      tags: [reto]
+      summary: Los cinco tests públicos
+      responses:
+        '200':
+          description: Lista de tests con id, family, mechanism, locator, payload y expected
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/PublicTest' } }
+  /sample.zip:
+    get:
+      tags: [reto]
+      summary: Dataset de muestra con su salida ideal
+      responses:
+        '200':
+          description: zip con input/, expected_output/, tests_sample.json, record_index.json y README.md
+          content:
+            application/zip: { schema: { type: string, format: binary } }
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer }
+  responses:
+    NotFound:
+      description: No existe
+      content:
+        application/json:
+          schema: { type: object, properties: { error: { type: string } } }
+  schemas:
+    Channel:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        purpose: { type: string }
+        is_private: { type: boolean }
+        members: { type: array, items: { type: string } }
+    User:
+      type: object
+      properties:
+        id: { type: string, example: U0V6WYVYG }
+        name: { type: string }
+        real_name: { type: string }
+        is_bot: { type: boolean }
+        deleted: { type: boolean }
+        profile:
+          type: object
+          properties:
+            real_name: { type: string }
+            display_name: { type: string }
+            title: { type: string }
+            email: { type: string }
+    SlackMessage:
+      type: object
+      required: [type, user, text, ts, client_msg_id]
+      properties:
+        type: { type: string, const: message }
+        user: { type: string, description: uid; resolver con /chats/users }
+        text: { type: string, description: 'puede traer menciones <@UID> y emojis' }
+        ts: { type: string, example: '1785769807.000100' }
+        thread_ts: { type: string }
+        client_msg_id: { type: string, description: 'es el id del registro en tu salida' }
+        subtype: { type: string, example: bot_message }
+        files:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string }
+              title: { type: string }
+              filetype: { type: string }
+              url_private: { type: string }
+        reactions:
+          type: array
+          items:
+            {
+              type: object,
+              properties:
+                {
+                  name: { type: string },
+                  users: { type: array, items: { type: string } },
+                  count: { type: integer },
+                },
+            }
+        edited: { type: object, properties: { user: { type: string }, ts: { type: string } } }
+    PublicTest:
+      type: object
+      properties:
+        id: { type: string, example: pub_02 }
+        family:
+          {
+            type: string,
+            enum: [directa, indirecta, oculta, falso_positivo, homonimos, consistencia],
+          }
+        mechanism: { type: string }
+        weight: { type: integer }
+        source: { type: string, enum: [chats, docs, tables, cross] }
+        locator: { type: object, properties: { record: { type: string }, field: { type: string } } }
+        payload: { type: array, items: { type: string } }
+        expected: { type: string }
+        lookup_forms:
+          { type: array, items: { type: string }, description: 'solo en el test de consistencia' }

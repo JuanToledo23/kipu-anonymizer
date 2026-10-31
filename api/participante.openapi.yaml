@@ -1,0 +1,257 @@
+openapi: 3.1.0
+info:
+  title: Reto PII - API que expone cada equipo
+  version: 1.0.0
+  description: |
+    Contrato mínimo que debe exponer la solución de cada equipo en una URL pública que el equipo guarda y
+    valida en /evento/reto de Frontier (VALIDAR ENTRYPOINT). El servicio de evaluación lo usa para (1) regenerar la salida
+    desde cero contra el API de fuentes, (2) descargar output/ y (3) probar que la seudonimización es
+    consistente con registros que el equipo nunca vio. Sin autenticación, accesible desde internet,
+    todo en UTF-8. Secuencia del evaluador: GET /health -> POST /run -> GET /run/{job_id} hasta done
+    (máximo 2 horas) -> GET /output/* -> POST /anonymize (varios lotes).
+    Los registros usan el mismo esquema normalizado que output/ (ver ENUNCIADO.md, "Qué entregas").
+servers:
+  - url: https://<tu-dominio>/v1
+    description: la URL que guardas en Frontier
+  - url: http://localhost:9000/v1
+    description: para probar en local
+paths:
+  /health:
+    get:
+      summary: Está vivo y quién es
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, team]
+                properties:
+                  status: { type: string, const: ok }
+                  team: { type: string }
+                  version: { type: string }
+                  models:
+                    {
+                      type: array,
+                      items: { type: string },
+                      description: 'modelos o APIs de LLM que usa el pipeline, si alguno',
+                    }
+  /run:
+    post:
+      summary: Regenera output/ desde cero contra el API de fuentes
+      description: Idempotente. Devuelve un job; el estado se consulta en GET /run/{job_id}. Debe terminar en menos de 2 horas.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sources_url, token]
+              properties:
+                sources_url:
+                  { type: string, example: https://reto-pii-fuentes-production.up.railway.app/v1 }
+                token: { type: string, description: token de equipo para el API de fuentes }
+      responses:
+        '202':
+          description: Job aceptado
+          content:
+            application/json:
+              schema: { type: object, properties: { job_id: { type: string } } }
+  /run/{job_id}:
+    get:
+      summary: Estado de una corrida
+      parameters:
+        - { name: job_id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: estado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [queued, running, done, failed] }
+                  started_at: { type: string, format: date-time }
+                  finished_at: { type: string, format: date-time }
+                  records:
+                    {
+                      type: object,
+                      properties:
+                        {
+                          chats: { type: integer },
+                          docs: { type: integer },
+                          tables: { type: integer },
+                        },
+                    }
+                  cost:
+                    {
+                      type: object,
+                      properties:
+                        {
+                          tokens_in: { type: integer },
+                          tokens_out: { type: integer },
+                          seconds: { type: number },
+                        },
+                    }
+                  error: { type: string }
+  /output/{archivo}:
+    get:
+      summary: Descarga uno de los cuatro archivos de la última corrida terminada
+      parameters:
+        - {
+            name: archivo,
+            in: path,
+            required: true,
+            schema: { type: string, enum: [chats.jsonl, docs.jsonl, tables.jsonl, entities.json] },
+          }
+      responses:
+        '200':
+          description: El archivo
+          content:
+            application/x-ndjson: { schema: { type: string } }
+            application/json: { schema: { type: object } }
+        '404': { description: no hay corrida terminada }
+  /anonymize:
+    post:
+      summary: Anonimiza registros nuevos con los mismos seudónimos de la corrida
+      description: |
+        El jurado manda registros en el esquema normalizado (pueden ser copias alteradas de registros
+        reales o registros nuevos que nombran a personas conocidas). La respuesta devuelve los mismos ids
+        anonimizados y las entidades que intervinieron. Se espera que una persona ya vista reciba el mismo
+        seudónimo que en output/, y que una persona nueva reciba uno nuevo, único y de la misma categoría.
+        Tiempo máximo: 60 segundos por lote de hasta 50 registros.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source, records]
+              properties:
+                source: { type: string, enum: [chats, docs, tables] }
+                records:
+                  type: array
+                  maxItems: 50
+                  items:
+                    oneOf:
+                      - $ref: '#/components/schemas/ChatRecord'
+                      - $ref: '#/components/schemas/DocRecord'
+                      - $ref: '#/components/schemas/TableRecord'
+      responses:
+        '200':
+          description: Registros anonimizados y entidades usadas
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [records, entities]
+                properties:
+                  records:
+                    type: array
+                    items:
+                      oneOf:
+                        - $ref: '#/components/schemas/ChatRecord'
+                        - $ref: '#/components/schemas/DocRecord'
+                        - $ref: '#/components/schemas/TableRecord'
+                  entities:
+                    type: array
+                    items: { $ref: '#/components/schemas/Entity' }
+        '422': { description: registro fuera de esquema }
+  /entities:
+    get:
+      summary: El diccionario completo de la última corrida (solo para el jurado)
+      responses:
+        '200':
+          description: '{entities: [...]}'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entities: { type: array, items: { $ref: '#/components/schemas/Entity' } }
+components:
+  schemas:
+    ChatRecord:
+      type: object
+      required: [id, thread_id, author, ts, text, attachments]
+      properties:
+        id: { type: string, description: 'client_msg_id del mensaje' }
+        thread_id: { type: string, example: 'soporte-cobros:1785769807.000100' }
+        author:
+          { type: string, description: nombre de la persona (seudónimo en la salida), nunca el uid }
+        ts: { type: string }
+        text: { type: string }
+        attachments:
+          type: array
+          items: { type: object, required: [filename], properties: { filename: { type: string } } }
+    DocRecord:
+      type: object
+      required: [id, format, filename, title, body, metadata]
+      properties:
+        id: { type: string, example: doc_03 }
+        format: { type: string, enum: [pdf, html, md] }
+        filename: { type: string }
+        title: { type: string }
+        body:
+          {
+            type: string,
+            description: texto del documento en markdown; conserva front matter y comentarios HTML si los había,
+          }
+        metadata: { type: object, additionalProperties: { type: string } }
+    TableRecord:
+      type: object
+      required: [id, table, columns]
+      properties:
+        id: { type: string, example: 'clientes:CL-12538' }
+        table: { type: string, enum: [clientes, transacciones, pqrs, empleados] }
+        columns:
+          {
+            type: object,
+            additionalProperties: { type: string },
+            description: todas las columnas originales; los valores son texto,
+          }
+    Entity:
+      type: object
+      required: [entity_id, type, originals, records]
+      properties:
+        entity_id: { type: string, example: p_001 }
+        type: { type: string, enum: [person, organization_or_place] }
+        originals:
+          {
+            type: array,
+            items: { type: string },
+            description: todas las formas reales encontradas (nombre,
+            variantes,
+            correo,
+            cédula,
+            celular,
+            dirección,
+            placa,
+            fecha de nacimiento),
+          }
+        pseudonyms:
+          type: object
+          description: una por tipo de identificador; name es obligatoria para personas
+          properties:
+            name: { type: string }
+            email: { type: string }
+            phone: { type: string }
+            cedula: { type: string }
+            handle: { type: string }
+            address: { type: string }
+            birth_iso: { type: string }
+            plate: { type: string }
+            account: { type: string }
+            passport: { type: string }
+        records:
+          { type: array, items: { type: string }, description: ids de registros donde aparece }
+        kept:
+          {
+            type: boolean,
+            description: true si se conservó tal cual (organización,
+            lugar,
+            marca,
+            figura pública),
+          }
+        reason: { type: string }

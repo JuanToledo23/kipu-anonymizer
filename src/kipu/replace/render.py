@@ -122,7 +122,7 @@ class Renderer:
                 0
             ]
         original = split_name(m.text) if m.kind == "external" else None
-        if m.kind == "first":
+        if m.kind in ("first", "given_lower"):
             return self._first_name(m.text, person)
         return self.name_text(person, m.text, original)
 

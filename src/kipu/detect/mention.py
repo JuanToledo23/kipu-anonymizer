@@ -29,7 +29,15 @@ PRIORITY = {
     "QUASI_OCCUPATION": 4,
     "QUASI_YEAR": 4,
 }
-NAME_KIND_PRIORITY = {"full": 0, "short": 1, "external": 2, "handle": 2, "first": 3, "surname": 4}
+NAME_KIND_PRIORITY = {
+    "full": 0,
+    "short": 1,
+    "external": 2,
+    "handle": 2,
+    "first": 3,
+    "given_lower": 3,
+    "surname": 4,
+}
 
 
 @dataclass(frozen=True)

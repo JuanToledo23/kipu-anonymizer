@@ -84,3 +84,37 @@ and the test that now covers it.
   anywhere in the input are reserved as real values before rendering.
 - **Test**: `tests/test_patterns.py::test_plates_both_classes_with_and_without_separators`,
   `test_plate_shaped_non_plates` and `tests/test_surrogates.py::test_surrogate_plate_keeps_its_class`.
+
+## 9. Lowercase given names of thread participants
+
+- **Symptom**: 25 chats kept the agent's first name in a lowercase thank-you ("mil gracias!! x",
+  "gracias x").
+- **Root cause**: a bare given name was only a candidate when capitalized.
+- **Fix**: lowercase given names (first or second given name) become `given_lower` mentions,
+  assigned only to a person in the group's context: thread authors and persons named by a strong
+  form or identifier in the thread, doc or row. There is no single-employee fallback. Given names
+  that are everyday words (`luz`, `rosa`, `celeste`, ...) count only after a vocative (`gracias`,
+  `hola`, `listo`, `ok`, `dale`, ...) or at the end of the message. The surrogate keeps the
+  lowercase.
+- **Test**: `tests/test_participants.py::test_lowercase_given_name_of_a_thread_participant`,
+  `test_everyday_word_names_only_as_vocative`.
+
+## 10. Names written with Cyrillic/Greek look-alike letters
+
+- **Symptom**: red-team case B02 ("Lаdy" with Cyrillic а/е/о) was neither detected nor linked,
+  but the validator's `norm` folds the same letters, so it counted as a leak.
+- **Root cause**: detection ran on the raw text.
+- **Fix**: detection runs on a Latin view built from validar.mjs's `CONFUSABLES` table (every
+  entry maps one character to one character, so offsets are unchanged). `fold` applies the same
+  map. Replacements apply to the original offsets, so the whole look-alike span is replaced.
+- **Test**: `tests/test_participants.py::test_cyrillic_lookalikes_are_detected`.
+
+## 11. Slack display names used as sign-offs
+
+- **Symptom**: chat `690a150c…` ended with the author's own users.json `display_name`, unchanged.
+- **Root cause**: `display_name` was never a name form.
+- **Fix**: a `display_name` of 3 or more characters that differs from the person's given names
+  is stored in the person's attrs and indexed as a given-name form. Like any bare given name, it
+  only counts for a person in context, and it renders as the surrogate's given name. Its
+  tokens are forbidden in surrogates.
+- **Test**: `tests/test_participants.py::test_display_name_signoff_is_replaced`.

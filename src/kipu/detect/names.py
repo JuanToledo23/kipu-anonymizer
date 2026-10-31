@@ -21,6 +21,81 @@ GAZETTEER_PATH = Path(__file__).with_name("gazetteer_co.txt")
 MAX_TOKENS = 4
 STRONG_KINDS = ("full", "short", "handle")
 PLAIN_PAIR = re.compile(r"\w+ \w+")
+# Given names that are also everyday words: lowercase, they only count in a vocative or sign-off.
+COMMON_WORD_GIVEN = frozenset(
+    {
+        "abril",
+        "alba",
+        "alegria",
+        "amparo",
+        "angel",
+        "angeles",
+        "asuncion",
+        "aurora",
+        "azucena",
+        "bella",
+        "belen",
+        "blanca",
+        "candido",
+        "celeste",
+        "cielo",
+        "clara",
+        "clemente",
+        "concepcion",
+        "consuelo",
+        "cruz",
+        "dolores",
+        "domingo",
+        "dulce",
+        "encarnacion",
+        "esperanza",
+        "estrella",
+        "fe",
+        "fidel",
+        "flor",
+        "franco",
+        "gema",
+        "gloria",
+        "iris",
+        "jazmin",
+        "jesus",
+        "justo",
+        "leon",
+        "linda",
+        "luz",
+        "mar",
+        "maximo",
+        "mercedes",
+        "milagros",
+        "modesto",
+        "natividad",
+        "nieves",
+        "pastor",
+        "paz",
+        "perla",
+        "pilar",
+        "pio",
+        "reyes",
+        "rey",
+        "rocio",
+        "rosa",
+        "rosario",
+        "salvador",
+        "santos",
+        "socorro",
+        "sol",
+        "tomas",
+        "trinidad",
+        "ventura",
+        "victoria",
+        "violeta",
+    }
+)
+VOCATIVE_BEFORE = re.compile(
+    r"(?:gracias|hola|listo|ok|okey|dale|chao|bueno|buenas|buenos dias|hecho|perfecto|claro"
+    r"|de nada|igualmente|un abrazo|saludos|atentamente)[\s!¡.,:;]*$"
+)
+MESSAGE_END = re.compile(r"[\s\W_]*$")
 
 
 @dataclass(frozen=True)
@@ -93,8 +168,13 @@ class NameIndex:
                 self._put(given[:1] + surnames, person.person_id, "full")
                 self._put(given[:1], person.person_id, "first")
             self._put(given, person.person_id, "first")
+            if len(given) > 1:
+                self._put(given[1:2], person.person_id, "first")
             for surname in surnames:
                 self.surnames[surname].add(person.person_id)
+        nickname = tuple(TOKEN.findall(fold(person.attrs.get("display_name", ""))))
+        if nickname:
+            self._put(nickname, person.person_id, "first")
         for handle in person.handles() | person.identifiers.get("handle", set()):
             tokens = tuple(TOKEN.findall(fold(handle)))
             if len(tokens) >= 2:
@@ -109,6 +189,12 @@ class NameIndex:
             hits = self.entries.get(window)
             if hits:
                 found.extend(self._mentions(span, start, end, hits))
+                if not is_capitalized(span) and _lower_given_ok(folded, window, start, end):
+                    pids = tuple(sorted(p for p, k in hits.items() if k == "first"))
+                    if pids:
+                        found.append(
+                            Mention(start, end, span, "NAME", kind="given_lower", candidates=pids)
+                        )
             if len(window) == 1 and window[0] in self.surnames and self._titled(text, start, span):
                 pids = tuple(sorted(self.surnames[window[0]]))
                 found.append(Mention(start, end, span, "NAME", kind="surname", candidates=pids))
@@ -160,6 +246,16 @@ class NameIndex:
             and len(window[1]) >= 3
             and all(w[:1].isupper() and w[1:].islower() for w in words)
         )
+
+
+def _lower_given_ok(folded: str, window: tuple[str, ...], start: int, end: int) -> bool:
+    """A lowercase given name; everyday-word names only as a vocative or at message end."""
+    if not any(w in COMMON_WORD_GIVEN for w in window):
+        return True
+    return bool(
+        VOCATIVE_BEFORE.search(folded[max(0, start - 20) : start])
+        or MESSAGE_END.fullmatch(folded[end:])
+    )
 
 
 class KeptMatcher:

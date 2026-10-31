@@ -4,6 +4,7 @@ import unicodedata
 from dataclasses import dataclass
 from functools import lru_cache
 
+from kipu.audit.texto import CONFUSABLES
 from kipu.pseudo.names_co import FEMALE_GIVEN, MALE_GIVEN
 
 EXTRA_FEMALE = (
@@ -45,6 +46,7 @@ EXTRA_MALE = (
 
 
 def fold_char(c: str) -> str:
+    c = CONFUSABLES.get(c, c)
     base = unicodedata.normalize("NFD", c)[:1] or c
     low = base.lower()
     return low[0] if low else base

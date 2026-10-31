@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from kipu.directory.names import fold
+from kipu.directory.names import fold, split_name
 from kipu.ingest.records import TableRecord
 
 STRONG = ("cedula", "email", "phone", "uid", "cliente_id", "kp_id")
@@ -103,5 +103,9 @@ def seeds_from_users(users: list[dict[str, Any]]) -> list[PersonSeed]:
         seed.add("handle", user.get("name", ""))
         seed.add("email", profile.get("email", ""))
         seed.add("phone", profile.get("phone", ""))
+        display = profile.get("display_name", "").strip()
+        given = {fold(g) for g in split_name(name).given}
+        if len(display) >= 3 and fold(display) not in given and fold(display) != fold(name):
+            seed.attrs["display_name"] = display
         seeds.append(seed)
     return seeds

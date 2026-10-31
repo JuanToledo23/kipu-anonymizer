@@ -5,8 +5,9 @@ to, whether a bare first name is a participant, and who owns an unknown email or
 """
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
+from kipu.audit.texto import CONFUSABLES, RX_CONFUSABLE
 from kipu.detect.mention import IDENTIFIER_LABELS, Mention, resolve_overlaps
 from kipu.detect.names import HandleMatcher, KeptMatcher, NameIndex
 from kipu.detect.patterns import asks_for_cedula, digits_of, find_digit_runs, find_identifiers
@@ -80,19 +81,23 @@ class Detector:
         raw: dict[tuple[str, str], list[Mention]] = {}
         previous_text = ""
         for surface in group.surfaces:
+            # Detection runs on a Latin view (look-alike letters map 1:1, so offsets hold).
+            view = unconfuse(surface.text)
             requested = asks_for_cedula(previous_text)
-            found = find_identifiers(surface.text, requested)
-            found += self._known_numbers(surface.text)
-            found += self.index.scan(surface.text)
-            found += self.handles.scan(surface.text)
-            found += self.kept.scan(surface.text)
+            found = find_identifiers(view, requested)
+            found += self._known_numbers(view)
+            found += self.index.scan(view)
+            found += self.handles.scan(view)
+            found += self.kept.scan(view)
             found += [
                 Mention(m.start(), m.end(), m.group(0), "RECORD_KEY", value=m.group(0))
-                for m in RECORD_KEY.finditer(surface.text)
+                for m in RECORD_KEY.finditer(view)
             ]
+            if view != surface.text:
+                found = [replace(m, text=surface.text[m.start : m.end]) for m in found]
             raw[(surface.record_id, surface.field)] = found
             if surface.field == "text":
-                previous_text = surface.text
+                previous_text = view
         return raw
 
     def _known_numbers(self, text: str) -> list[Mention]:
@@ -148,6 +153,10 @@ class Detector:
             return m.with_person(_choose(m.candidates, [], context) or m.candidates[-1])
         if m.label != "NAME" or m.kind == "external":
             return m
+        if m.kind == "given_lower":
+            # Lowercase given names only for persons taking part in this thread, doc or row.
+            chosen = _choose(m.candidates, [], context)
+            return m.with_person(chosen) if chosen else None
         nearby = sorted(
             (_distance(s, m), owner)
             for s in siblings
@@ -234,6 +243,10 @@ class Detector:
             if person is not None:
                 found.extend(_quasi_for(person, surface.text, folded))
         return found
+
+
+def unconfuse(text: str) -> str:
+    return RX_CONFUSABLE.sub(lambda m: CONFUSABLES[m.group(0)], text)
 
 
 def _distance(a: Mention, b: Mention) -> int:

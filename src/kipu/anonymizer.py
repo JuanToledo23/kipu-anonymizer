@@ -223,6 +223,7 @@ def _forbidden(directory: Directory) -> tuple[set[str], set[str], set[str]]:
             names.add(fold(full))
             tokens.update(fold(full).split())
         names.add(fold(person.name.short))
+        tokens.update(fold(person.attrs.get("display_name", "")).split())
         for id_type, values in person.identifiers.items():
             for value in values:
                 observed.add(norm_identifier(id_type, value))

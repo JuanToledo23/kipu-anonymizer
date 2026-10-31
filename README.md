@@ -32,6 +32,14 @@ Docker: `make docker-build` then
 `docker run -p 9000:9000 --env-file .env -v kipu-data:/data kipu-anonymizer`.
 Keep the `/data` volume: it holds the registry that keeps pseudonyms stable between runs.
 
+### Sources client
+
+The sources client has connect (10 s) and read (60 s) timeouts and retries 429/5xx and transport
+errors with exponential backoff (`Retry-After` honored), so one flaky page does not fail a run.
+Channels, dates, docs and tables are enumerated from the API listings; a listed date or doc
+that answers 404 is skipped with a log line. Each run logs one summary line
+(`persons reused=… created=…, records chats=… docs=… tables=…, seconds=…`).
+
 Production runs on Fly.io (`https://kipu-anonymizer.fly.dev/v1`); see [docs/deploy.md](docs/deploy.md)
 for deploys, secrets and logs. Never deploy while an evaluation run is in progress.
 

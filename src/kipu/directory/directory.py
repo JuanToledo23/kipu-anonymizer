@@ -40,6 +40,7 @@ class Directory:
         self.persons: dict[str, Person] = {}
         self.by_id: dict[tuple[str, str], str] = {}
         self.claimed: set[str] = set()
+        self.created: set[str] = set()
 
     def add_seeds(self, seeds: list[PersonSeed], texts_by_uid: dict[str, str]) -> None:
         for cluster in resolve(seeds, texts_by_uid):
@@ -61,9 +62,10 @@ class Directory:
         for seed in cluster:
             for id_type, values in seed.identifiers.items():
                 identifiers.setdefault(id_type, set()).update(values)
-        person_id = self._existing_person(identifiers) or self.registry.new_person(
-            kind, gender, name.full, attrs
-        )
+        person_id = self._existing_person(identifiers)
+        if person_id is None:
+            person_id = self.registry.new_person(kind, gender, name.full, attrs)
+            self.created.add(person_id)
         self.claimed.add(person_id)
         self.registry.update_profile(person_id, name.full, attrs)
         person = self.persons.get(person_id) or Person(person_id, kind, gender, name)
@@ -137,7 +139,10 @@ class Directory:
             name = " ".join(w.capitalize() for w in re.split(r"[_.\-]+", name) if w)
         parts = split_name(name)
         gender = gender or infer_gender(parts.first)
-        person_id = existing or self.registry.new_person("external", gender, parts.full, {})
+        person_id = existing
+        if person_id is None:
+            person_id = self.registry.new_person("external", gender, parts.full, {})
+            self.created.add(person_id)
         person = Person(person_id, "external", gender, parts)
         if name:
             person.names.add(name)

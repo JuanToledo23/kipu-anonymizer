@@ -2,6 +2,8 @@
 
 Both expose the same resource methods. HttpSource writes every response under
 `data/raw/<run_id>/` using the DirSource layout, so any run can be replayed offline.
+Nothing is enumerated from a fixed list: channels, dates, docs and tables come from the
+listings, so new ones are picked up as the sources grow.
 """
 
 import json
@@ -15,7 +17,16 @@ import httpx
 
 log = logging.getLogger(__name__)
 
-TABLE_FILES = ("clientes.csv", "transacciones.csv", "pqrs.xml", "empleados.xml")
+RETRY_STATUSES = (429, 500, 502, 503, 504)
+TIMEOUT = httpx.Timeout(60.0, connect=10.0)
+
+
+class SourceError(RuntimeError):
+    """A resource could not be fetched after all retries."""
+
+
+class SourceNotFound(SourceError):
+    """A listed resource does not exist (404, or a missing file in a replay)."""
 
 
 class SourceClient(Protocol):
@@ -25,7 +36,7 @@ class SourceClient(Protocol):
     def messages(self, channel: str, date: str) -> list[dict[str, Any]]: ...
     def docs_index(self) -> list[dict[str, Any]]: ...
     def doc(self, doc_id: str, filename: str) -> bytes: ...
-    def table_names(self) -> list[str]: ...
+    def tables_index(self) -> list[dict[str, Any]]: ...
     def table(self, name: str) -> bytes: ...
     def record_index(self) -> dict[str, list[str]] | None: ...
 
@@ -36,8 +47,14 @@ class DirSource:
     def __init__(self, path: str | Path) -> None:
         self.root = Path(path)
 
+    def _bytes(self, rel: str) -> bytes:
+        try:
+            return (self.root / rel).read_bytes()
+        except FileNotFoundError as exc:
+            raise SourceNotFound(f"{rel} not found in {self.root}") from exc
+
     def _json(self, rel: str) -> Any:
-        return json.loads((self.root / rel).read_text(encoding="utf-8"))
+        return json.loads(self._bytes(rel))
 
     def channels(self) -> list[dict[str, Any]]:
         return self._json("chats/channels.json")
@@ -58,13 +75,22 @@ class DirSource:
         return self._json("docs/index.json")
 
     def doc(self, doc_id: str, filename: str) -> bytes:
-        return (self.root / "docs" / filename).read_bytes()
+        return self._bytes(f"docs/{filename}")
 
-    def table_names(self) -> list[str]:
-        return [n for n in TABLE_FILES if (self.root / "tables" / n).is_file()]
+    def tables_index(self) -> list[dict[str, Any]]:
+        """The saved API listing when present (it carries charset and separator), else every
+        file in `tables/`."""
+        folder = self.root / "tables"
+        if (folder / "_index.json").is_file():
+            return self._json("tables/_index.json")
+        return [
+            {"name": p.name}
+            for p in sorted(folder.glob("*"))
+            if p.suffix in (".csv", ".xml") and not p.name.startswith("_")
+        ]
 
     def table(self, name: str) -> bytes:
-        return (self.root / "tables" / name).read_bytes()
+        return self._bytes(f"tables/{name}")
 
     def record_index(self) -> dict[str, list[str]] | None:
         for candidate in (self.root / "record_index.json", self.root.parent / "record_index.json"):
@@ -101,6 +127,8 @@ class HttpSource:
         etag_cache: str | Path | None = None,
         per_minute: int = 500,
         max_retries: int = 5,
+        backoff: float = 0.5,
+        transport: httpx.BaseTransport | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.raw = Path(raw_dir)
@@ -108,8 +136,12 @@ class HttpSource:
         self.etags: dict[str, dict[str, str]] = self._load_etags()
         self.limiter = RateLimiter(per_minute)
         self.max_retries = max_retries
+        self.backoff = backoff
         self.client = httpx.Client(
-            headers={"Authorization": f"Bearer {token}"}, timeout=60.0, follow_redirects=True
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=TIMEOUT,
+            follow_redirects=True,
+            transport=transport,
         )
         self.requests = 0
 
@@ -128,10 +160,15 @@ class HttpSource:
         cached = self.etags.get(url)
         headers = {"If-None-Match": cached["etag"]} if cached else {}
         response = self._request(url, headers)
-        if response.status_code == 304 and cached and Path(cached["file"]).is_file():
+        if response.status_code == 304 and not (cached and Path(cached["file"]).is_file()):
+            response = self._request(url, {})
+        if response.status_code == 304:
             data = Path(cached["file"]).read_bytes()
+        elif response.status_code == 404:
+            raise SourceNotFound(f"GET {url}: 404")
+        elif response.is_error:
+            raise SourceError(f"GET {url}: HTTP {response.status_code}")
         else:
-            response.raise_for_status()
             data = response.content
         target = self.raw / save_as
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -149,19 +186,19 @@ class HttpSource:
                 response = self.client.get(url, headers=headers)
             except httpx.TransportError as exc:
                 if attempt == self.max_retries:
-                    raise
+                    raise SourceError(
+                        f"GET {url}: {type(exc).__name__} after {attempt + 1} attempts ({exc})"
+                    ) from exc
                 log.warning("transport error on %s (%s), retrying", url, type(exc).__name__)
             else:
-                if response.status_code not in (429, 500, 502, 503, 504):
+                if response.status_code not in RETRY_STATUSES or attempt == self.max_retries:
                     return response
-                if attempt == self.max_retries:
-                    response.raise_for_status()
                 log.warning("HTTP %s on %s, retrying", response.status_code, url)
                 retry_after = response.headers.get("retry-after", "")
                 if retry_after.isdigit():
-                    time.sleep(int(retry_after))
+                    time.sleep(min(60, int(retry_after)))
                     continue
-            time.sleep(min(30.0, 0.5 * 2**attempt))
+            time.sleep(min(30.0, self.backoff * 2**attempt))
         raise RuntimeError("unreachable")
 
     def _json(self, path: str, save_as: str) -> Any:
@@ -185,9 +222,8 @@ class HttpSource:
     def doc(self, doc_id: str, filename: str) -> bytes:
         return self._get(f"docs/{doc_id}", f"docs/{filename}")
 
-    def table_names(self) -> list[str]:
-        listing = self._json("tables", "tables/_index.json")
-        return [t["name"] for t in listing]
+    def tables_index(self) -> list[dict[str, Any]]:
+        return self._json("tables", "tables/_index.json")
 
     def table(self, name: str) -> bytes:
         return self._get(f"tables/{name}", f"tables/{name}")

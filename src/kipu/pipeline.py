@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import httpx
 import orjson
 
 from kipu.anonymizer import Anonymizer
@@ -32,6 +33,8 @@ class RunReport:
     records: dict[str, int] = field(default_factory=dict)
     seconds: float = 0.0
     persons: int = 0
+    persons_created: int = 0
+    persons_reused: int = 0
     audit_hits: dict[str, list[str]] = field(default_factory=dict)
     missing_ids: dict[str, int] = field(default_factory=dict)
     published: bool = False
@@ -51,9 +54,15 @@ def make_source(spec: str, settings: Settings, run_id: str) -> SourceClient:
     raise ValueError(f"unknown source spec: {spec}")
 
 
-def http_source(url: str, token: str, settings: Settings, run_id: str) -> HttpSource:
+def http_source(
+    url: str,
+    token: str,
+    settings: Settings,
+    run_id: str,
+    transport: httpx.BaseTransport | None = None,
+) -> HttpSource:
     raw = settings.data_dir / "raw"
-    return HttpSource(url, token, raw / run_id, etag_cache=raw / "etags.json")
+    return HttpSource(url, token, raw / run_id, etag_cache=raw / "etags.json", transport=transport)
 
 
 def build_directory(
@@ -73,9 +82,11 @@ def build_directory(
     return directory, authors
 
 
-def run(source: SourceClient, out_dir: Path, settings: Settings) -> RunReport:
+def run(
+    source: SourceClient, out_dir: Path, settings: Settings, run_id: str | None = None
+) -> RunReport:
     started = time.monotonic()
-    report = RunReport(run_id=uuid.uuid4().hex[:12])
+    report = RunReport(run_id=run_id or uuid.uuid4().hex[:12])
     corpus = load_corpus(source)
     report.pdf_xmp_docs = sorted(corpus.pdf_xmp)
     registry = Registry(settings.registry_path)
@@ -99,6 +110,8 @@ def run(source: SourceClient, out_dir: Path, settings: Settings) -> RunReport:
             ][:200_000]
         )
         report.persons = sum(1 for e in entities if not e.get("kept"))
+        report.persons_created = len(directory.created)
+        report.persons_reused = len(directory.persons) - report.persons_created
     finally:
         registry.close()
     report.records = {k: len(v) for k, v in outputs.items()}
@@ -107,6 +120,14 @@ def run(source: SourceClient, out_dir: Path, settings: Settings) -> RunReport:
     write_output(outputs, entities, out_dir)
     report.published = True
     report.seconds = round(time.monotonic() - started, 2)
+    log.info(
+        "run %s summary: persons reused=%d created=%d, records %s, seconds=%.1f",
+        report.run_id,
+        report.persons_reused,
+        report.persons_created,
+        " ".join(f"{k}={v}" for k, v in report.records.items()),
+        report.seconds,
+    )
     return report
 
 
@@ -154,7 +175,7 @@ def main() -> None:
     run_id = time.strftime("%Y%m%dT%H%M%S")
     source = make_source(args.source, settings, run_id)
     try:
-        report = run(source, args.out, settings)
+        report = run(source, args.out, settings, run_id)
     finally:
         if isinstance(source, HttpSource):
             source.close()

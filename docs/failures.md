@@ -160,3 +160,18 @@ and the test that now covers it.
 - **Test**: `tests/test_linking.py` (contradicting cédula → new person, first phone → same
   person, two homonyms → two persons, 5–40 character gaps, widened unknown names, kept terms
   not widened).
+
+## 13. Growth-intolerant ingestion
+
+- **Symptom**: with a grown copy of the sources, a table or doc format outside the output
+  schema crashed the whole run (`TableRecord.table` literal); a date or doc listed but answering
+  404 failed the run; a 304 whose cached copy was gone produced an empty body; a connection
+  error surfaced as a bare httpx error without the URL. `DirSource` read four hardcoded table
+  files.
+- **Root cause**: ingestion assumed the listings and the cache were always consistent.
+- **Fix**: `DirSource` lists tables from the saved `_index.json` (or the files present) and
+  CSVs take charset and separator from the listing. Missing dates, channels without a dates
+  listing, missing docs and tables are skipped with a log line; tables or doc formats outside
+  the output schema are skipped with a warning. A 304 without a cached copy refetches
+  unconditionally. Failures raise `SourceError` naming the URL and the attempts.
+- **Test**: `tests/test_ingest_growth.py`.

@@ -13,7 +13,7 @@ from lxml import etree
 from kipu.directory.names import split_name
 from kipu.ingest.html_md import html_to_markdown
 from kipu.ingest.records import Attachment, ChatRecord, DocRecord, TableRecord
-from kipu.ingest.source import SourceClient
+from kipu.ingest.source import SourceClient, SourceNotFound
 
 log = logging.getLogger(__name__)
 
@@ -37,6 +37,7 @@ TABLE_KEYS = {
     "pqrs": "radicado",
     "empleados": "id",
 }
+DOC_FORMATS = ("md", "html", "pdf")
 CSV_FORMATS = {"clientes.csv": ("latin-1", ";"), "transacciones.csv": ("utf-8", ",")}
 FRONT_MATTER = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 
@@ -60,21 +61,46 @@ class RawCorpus:
 
 
 def load_corpus(source: SourceClient) -> RawCorpus:
+    """Everything the listings enumerate. A listed date, doc or table that turns out missing
+    (404) is skipped with a log line instead of failing the run."""
     users = source.users()
     channels = source.channels()
-    messages = {
-        ch["name"]: [
-            m for d in source.channel_dates(ch["name"]) for m in source.messages(ch["name"], d)
-        ]
-        for ch in channels
-    }
-    tables_raw = {name: source.table(name) for name in source.table_names()}
+    messages = {ch["name"]: channel_messages(source, ch["name"]) for ch in channels}
+    listing = source.tables_index()
+    tables_raw = {}
+    for entry in listing:
+        try:
+            tables_raw[entry["name"]] = source.table(entry["name"])
+        except SourceNotFound:
+            log.warning("table %s listed but not found, skipped", entry["name"])
     corpus = RawCorpus(users, channels, messages, tables_raw)
     corpus.chats = parse_chats(users, messages)
     corpus.docs, corpus.pdf_xmp = parse_docs(source)
-    corpus.tables = parse_tables(tables_raw)
-    corpus.record_index = source.record_index()
+    corpus.tables = parse_tables(tables_raw, {e["name"]: e for e in listing})
+    try:
+        corpus.record_index = source.record_index()
+    except SourceNotFound:
+        log.warning("record_index not found")
     return corpus
+
+
+def channel_messages(source: SourceClient, channel: str) -> list[dict[str, Any]]:
+    try:
+        dates = source.channel_dates(channel)
+    except SourceNotFound:
+        log.warning("chats/%s: no dates listing, channel skipped", channel)
+        return []
+    messages = []
+    for date in dates:
+        try:
+            day = source.messages(channel, date)
+        except SourceNotFound:
+            log.warning("chats/%s/%s: listed but not found, skipped", channel, date)
+            continue
+        if not day:
+            log.info("chats/%s/%s: empty, skipped", channel, date)
+        messages.extend(day)
+    return messages
 
 
 def author_name(user: dict[str, Any] | None) -> str:
@@ -94,6 +120,9 @@ def parse_chats(
     records = []
     for channel, msgs in messages.items():
         for m in msgs:
+            if not m.get("client_msg_id") or not m.get("ts"):
+                log.warning("chats/%s: message without client_msg_id or ts, skipped", channel)
+                continue
             user = by_uid.get(m.get("user", ""))
             author = author_name(user) or m.get("username", "")
             records.append(
@@ -127,7 +156,14 @@ def parse_docs(source: SourceClient) -> tuple[list[DocRecord], dict[str, str]]:
     docs = []
     xmp: dict[str, str] = {}
     for entry in source.docs_index():
-        data = source.doc(entry["id"], entry["filename"])
+        if entry.get("format") not in DOC_FORMATS:
+            log.warning("doc %s has unknown format %r, skipped", entry["id"], entry.get("format"))
+            continue
+        try:
+            data = source.doc(entry["id"], entry["filename"])
+        except SourceNotFound:
+            log.warning("doc %s (%s) listed but not found, skipped", entry["id"], entry["filename"])
+            continue
         fmt = entry["format"]
         if fmt == "md":
             body, metadata = parse_markdown(data.decode("utf-8"))
@@ -169,21 +205,50 @@ def parse_pdf(data: bytes) -> tuple[str, dict[str, str], str]:
     return body, metadata, xmp_text
 
 
-def parse_tables(tables_raw: dict[str, bytes]) -> list[TableRecord]:
+def parse_tables(
+    tables_raw: dict[str, bytes], listing: dict[str, dict[str, Any]] | None = None
+) -> list[TableRecord]:
+    listing = listing or {}
     records = []
     for name, data in tables_raw.items():
         table = name.rsplit(".", 1)[0]
-        rows = _csv_rows(name, data) if name.endswith(".csv") else _xml_rows(data)
+        if table not in TABLE_KEYS:
+            log.warning("table %s is not in the output schema, skipped", name)
+            continue
+        if name.endswith(".csv"):
+            rows = _csv_rows(data, *_csv_format(name, data, listing.get(name, {})))
+        else:
+            rows = _xml_rows(data)
         if not rows:
             continue
-        key = TABLE_KEYS.get(table) or next(iter(rows[0]))
+        key = TABLE_KEYS[table]
         for row in rows:
             records.append(TableRecord(id=f"{table}:{row[key]}", table=table, columns=row))
     return records
 
 
-def _csv_rows(name: str, data: bytes) -> list[dict[str, str]]:
-    encoding, delimiter = CSV_FORMATS.get(name, ("utf-8", ","))
+def _csv_format(name: str, data: bytes, meta: dict[str, Any]) -> tuple[str, str]:
+    """Charset and separator: the API listing, then the known tables, then a guess."""
+    known = CSV_FORMATS.get(name)
+    encoding = meta.get("charset") or (known[0] if known else _guess_encoding(data))
+    delimiter = meta.get("separator") or (known[1] if known else _guess_delimiter(data))
+    return encoding, delimiter
+
+
+def _guess_encoding(data: bytes) -> str:
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return "latin-1"
+    return "utf-8"
+
+
+def _guess_delimiter(data: bytes) -> str:
+    header = data.split(b"\n", 1)[0]
+    return ";" if header.count(b";") > header.count(b",") else ","
+
+
+def _csv_rows(data: bytes, encoding: str, delimiter: str) -> list[dict[str, str]]:
     reader = csv.DictReader(io.StringIO(data.decode(encoding), newline=""), delimiter=delimiter)
     return [{k: v or "" for k, v in row.items()} for row in reader]
 

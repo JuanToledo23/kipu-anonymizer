@@ -22,6 +22,12 @@ DATA_DIR=data/sample_run uv run python -m kipu.pipeline --source dir:data/sample
   --out data/sample_run/output                                           # sample, own registry
 ```
 
+LLM layer flags (`.env`; the layer needs `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY` is the fallback):
+
+- `LLM_ENABLED` (default `true`): `false` runs rules only.
+- `LLM_MAX_COST_USD` (default `5`): per-run cap; once reached, no more calls and the run goes on with rules only.
+- `LLM_PRIMARY` / `LLM_SECOND` / `LLM_STRONG`: model slug overrides (defaults `anthropic/claude-haiku-5.5`, `google/gemini-3.5-flash-lite`, `anthropic/claude-sonnet-5.5`).
+
 Every route is served at both `/v1/...` and `/...`. With `ENTRYPOINT_TOKEN` set, all routes
 require `Authorization: Bearer <token>` except `GET /health` (no secrets in it).
 

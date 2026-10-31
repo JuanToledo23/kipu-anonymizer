@@ -23,7 +23,14 @@ from kipu.llm.extract import (
     doc_units,
     table_units,
 )
-from kipu.llm.verify import Key, Span, Verifier, context_matches, word_pattern
+from kipu.llm.verify import (
+    Key,
+    Span,
+    Verifier,
+    context_matches,
+    product_name,
+    word_pattern,
+)
 
 OMISSION_SYSTEM = f"""Revisas textos en español de Colombia (soporte de Kipu Pay) que YA \
 pasaron por un anonimizador: los nombres, correos, teléfonos y documentos se reemplazaron por \
@@ -91,6 +98,8 @@ class OmissionVerifier(Verifier):
                     exact = len(raw_hits) == len(out_hits) and len(matched) == 1
                     raw_hits = [raw_hits[matched[0]]] if exact else []
                 raw_text = self.raw[(t.record_id, t.field)]
+                if c.label == "PERSON":
+                    raw_hits = [(s, e) for s, e in raw_hits if not product_name(raw_text[:s])]
                 found += [
                     Span(
                         t.record_id, t.field, s, e, raw_text[s:e], c.label, c.gender, c.role, source

@@ -240,3 +240,18 @@ and the test that now covers it.
   verifier.
 - **Test**: `tests/test_llm_verify.py::test_record_ids_are_never_accounts`,
   `tests/test_render.py::test_pagalo_client_id_in_text_is_evidence_for_the_homonym`.
+
+## 19. Common words and campaign names replaced as persons
+
+- **Symptom**: the LLM replay of the grown corpus replaced `Hola. Compré un televisor` →
+  `Hola. Lorenzo ...`, `placa ... Esposo autorizado` → `Alfonso autorizado`, and the campaign
+  name in `Campaña "María"` / `se va a llamar 'María'` → `Miriam` / `Nidia`.
+- **Root cause**: a single capitalized token proposed as PERSON by one model is name-shaped, so it
+  was accepted without adjudication; nothing told a product name from a person name.
+- **Fix**: a single-token PERSON is rejected if it is a common word (stoplist: Compré, Esposo,
+  Señora, Gracias, Hola, Listo, Dale...), and otherwise needs our given-name/surname lexicon or a
+  client/employee role. A PERSON hit right after "campaña", "promoción", "promo", "programa",
+  "plan", "producto" or "tarjeta" (optionally quoted, "tarjeta edición", "campaña de X se va a
+  llamar") is a product name and is kept, also in the omission pass.
+- **Test**: `tests/test_llm_verify.py::test_common_words_are_not_persons`,
+  `test_lone_token_needs_lexicon_or_named_role`, `test_campaign_names_are_products`.

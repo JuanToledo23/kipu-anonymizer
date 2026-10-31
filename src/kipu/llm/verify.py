@@ -51,6 +51,42 @@ AGE_NUMBER = re.compile(r"\b(\d{1,3})\b")
 EMAIL_PLAIN = re.compile(r"[a-z0-9._%+\-]+@[a-z0-9\-]+(?:\.[a-z0-9\-]+)+")
 RECORD_CODE = re.compile(r"\b(?:CL|PG|KP|TX|PQR)-\d", re.I)
 NOT_PERSONS = frozenset({"kipi", "kipu", "kipu pay"})
+COMMON_WORDS = frozenset(
+    {
+        "compre",
+        "esposo",
+        "esposa",
+        "senor",
+        "senora",
+        "cliente",
+        "agente",
+        "gracias",
+        "hola",
+        "saludos",
+        "buenas",
+        "listo",
+        "dale",
+        "buenos",
+        "bueno",
+        "vale",
+        "perfecto",
+        "claro",
+        "hijo",
+        "hija",
+        "mama",
+        "papa",
+        "hermano",
+        "hermana",
+        "titular",
+        "asesor",
+        "asesora",
+    }
+)
+NAMED_ROLES = ("client", "employee")
+PRODUCT_CONTEXT = re.compile(
+    r"\b(?:campana|promocion|promo|programa|plan|producto|tarjeta)"
+    r"(?:\s+edicion|\s+de\s+\w+\s+se\s+(?:va\s+a\s+)?llamar\w*)?\s*[\"'«“‘]?$"
+)
 TITLES = frozenset(
     {
         "senor",
@@ -149,6 +185,24 @@ def word_pattern(text: str) -> re.Pattern[str]:
     left = r"(?<!\w)" if text[:1].isalnum() else ""
     right = r"(?!\w)" if text[-1:].isalnum() else ""
     return re.compile(left + re.escape(text) + right)
+
+
+def product_name(before: str) -> bool:
+    """A capitalized word right after "campaña", "plan", "tarjeta"... names a product
+    (`campaña "María"`, "tarjeta edición María", "la campaña ... se va a llamar 'María'")."""
+    return PRODUCT_CONTEXT.search(fold(before[-60:])) is not None
+
+
+def lone_name_ok(c: Candidate, index: NameIndex) -> bool:
+    """A single-token person needs a known given name or surname, or a client/employee role;
+    a common word ("Compré", "Esposo") is never a name, whatever the model said."""
+    tokens = TOKEN.findall(fold(c.text))
+    if len(tokens) != 1:
+        return True
+    token = tokens[0]
+    if token in COMMON_WORDS:
+        return False
+    return token in index.given_lexicon or token in index.surname_lexicon or c.role in NAMED_ROLES
 
 
 def name_shaped(text: str, index: NameIndex) -> bool:
@@ -278,6 +332,8 @@ class Verifier:
         tokens = tuple(TOKEN.findall(fold(c.text)))
         if not tokens or tokens in self.kept.terms or tokens in self.index.kept_terms:
             return False
+        if c.label == "PERSON" and not lone_name_ok(c, self.index):
+            return False
         return valid_shape(c)
 
     def locate(self, unit: Unit, c: Candidate) -> list[tuple[int, int, int]]:
@@ -310,6 +366,8 @@ class Verifier:
         found = []
         for i, start, end in self.locate(unit, c):
             item = unit.items[i]
+            if c.label == "PERSON" and product_name(item.text[:start]):
+                continue
             for t in item.targets:
                 if self._covered(t.record_id, t.field, t.offset + start, t.offset + end):
                     continue

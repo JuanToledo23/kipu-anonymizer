@@ -255,3 +255,24 @@ and the test that now covers it.
   llamar") is a product name and is kept, also in the omission pass.
 - **Test**: `tests/test_llm_verify.py::test_common_words_are_not_persons`,
   `test_lone_token_needs_lexicon_or_named_role`, `test_campaign_names_are_products`.
+
+## 20. Homonyms settled by the wrong evidence
+
+- **Symptom**: `scripts/judge_identity.py` on the deployed run-2 output (`data/preflight_v5`)
+  found four homonym mentions with the other person's pseudonym: `doc_14` credit request
+  `S-2608-01 | Mateo Henao` (the transaction for that request is CL-37620's), `doc_16`'s ticket
+  table where the client column said `Laura Ospina` (rendered as the agent of that name),
+  chat `c710e9b6` "la PQR-2026-0451 de Daniela Ordóñez con el extracto de Daniela Ordóñez: son
+  dos clientas distintas con el mismo nombre" (both as the PQR owner), and chat `f9679dfe`
+  "Alejandra Rojas publicó la primera pieza de la serie de educación financiera" (the new agent
+  welcomed in that thread instead of the journalist of the marketing plan).
+- **Root cause**: the tie-break lived outside the name and outside the record: in a transaction
+  description, in a table header, in the sentence itself, or in another document. Docs prefer
+  employees; one radicado settled every mention within 80 characters; thread context beat
+  everything after participants.
+- **Fix**: transaction codes are evidence for their client; a "Cliente"/"Agente" column header
+  restricts the candidates; a "same name, different persons" cue splits repeated mentions; rare
+  words shared with identifier-settled mentions elsewhere in the corpus rank after participants
+  and before thread context. Pseudonyms of every existing person are unchanged.
+- **Test**: `tests/test_homonyms.py`, `tests/test_growth_pagalo.py` (`f9679dfe` now expects the
+  journalist).

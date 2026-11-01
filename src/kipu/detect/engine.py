@@ -5,6 +5,7 @@ to, whether a bare first name is a participant, and who owns an unknown email or
 """
 
 import re
+from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
@@ -14,7 +15,9 @@ from kipu.detect.names import HandleMatcher, KeptMatcher, NameIndex, ngrams, tok
 from kipu.detect.patterns import asks_for_cedula, digits_of, find_digit_runs, find_identifiers
 from kipu.detect.quasi import QuasiLexicon
 from kipu.directory.directory import EXCLUSIVE_TYPES, Directory, Person
+from kipu.directory.names import fold
 from kipu.directory.seed import norm_identifier
+from kipu.identity.homonyms import REFERENCE, WINDOW, by_profile
 
 ID_TYPES = {
     "EMAIL": "email",
@@ -35,6 +38,22 @@ LINKING_KINDS = ("full", "short", "external", "llm_full")
 MAX_LINK_GAP = 40
 SENTENCE_END = re.compile(r"[!?\n]|\.\s+[A-ZÁÉÍÓÚÑ]")
 WEAK_NAME_KINDS = ("first", "surname")
+# The text itself says two mentions of one name are two persons.
+DISTINCT_CUE = re.compile(
+    r"mismo nombre|hom[oó]nim[oa]s?|distint[oa]s|no (?:es|son) la misma|otra persona", re.I
+)
+# Table column headers that say whether the names below are clients or staff.
+COLUMN_ROLES = {
+    "cliente": "client",
+    "clienta": "client",
+    "titular": "client",
+    "agente": "employee",
+    "asesor": "employee",
+    "asesora": "employee",
+    "responsable": "employee",
+    "empleado": "employee",
+    "reporta a": "employee",
+}
 
 
 @dataclass
@@ -92,8 +111,9 @@ class Detector:
         for surface in group.surfaces:
             key = (surface.record_id, surface.field)
             ours = self._surrogate_spans(surface.text)
-            assigned = (self._assign(m, raw[key], context, group) for m in raw[key])
+            assigned = (self._assign(m, raw[key], context, group, surface) for m in raw[key])
             mentions = [m for m in assigned if m and not self._is_surrogate(m, ours)]
+            mentions = self._split_homonyms(mentions, raw[key], surface.text)
             mentions += self._quasi(surface, context)
             chosen = resolve_overlaps(mentions)
             if self.extra:
@@ -119,6 +139,11 @@ class Detector:
             found += [
                 Mention(m.start(), m.end(), m.group(0), "RECORD_KEY", value=m.group(0))
                 for m in RECORD_KEY.finditer(view)
+            ]
+            found += [
+                Mention(m.start(), m.end(), m.group(0), "REFERENCE", owner, value=m.group(0))
+                for m in REFERENCE.finditer(view)
+                if (owner := self.directory.references.get(m.group(0)))
             ]
             if view != surface.text:
                 found = [replace(m, text=surface.text[m.start : m.end]) for m in found]
@@ -161,6 +186,8 @@ class Detector:
             return m.person_id or self.directory.owner_of(ID_TYPES[m.label], m.value)
         if m.label == "RECORD_KEY":
             return self.directory.owner_of(RECORD_KEY_TYPES[m.value[:3]], m.value)
+        if m.label == "REFERENCE":
+            return m.person_id
         if m.label == "SLACK":
             return self.directory.owner_of("uid", m.value)
         if m.label == "NAME" and m.kind in STRONG_NAME_KINDS and len(m.candidates) == 1:
@@ -172,9 +199,14 @@ class Detector:
         return kind_ok[0] if kind_ok else None
 
     def _assign(
-        self, m: Mention, siblings: list[Mention], context: list[str], group: Group
+        self,
+        m: Mention,
+        siblings: list[Mention],
+        context: list[str],
+        group: Group,
+        surface: Surface,
     ) -> Mention | None:
-        if m.label == "RECORD_KEY":
+        if m.label in ("RECORD_KEY", "REFERENCE"):
             return None
         if m.label == "SLACK":
             return m.with_person(self.directory.owner_of("uid", m.value))
@@ -192,17 +224,65 @@ class Detector:
             for s in siblings
             if s is not m and (owner := self._evidence_owner(s)) and _distance(s, m) < 80
         )
+        role = column_role(surface.text, m.start)
+        candidates = (
+            tuple(p for p in m.candidates if self.directory.persons[p].kind == role) or m.candidates
+        )
+        participants = [p for p in group.authors.values() if p] + group.related
+        if group.owner:
+            participants.append(group.owner)
         chosen = (
-            _choose(m.candidates, [p for _, p in nearby], context)
+            _choose(candidates, [p for _, p in nearby], participants)
+            or self._profiled(m, surface.text, candidates)
+            or _choose(candidates, [], context)
             or self._judged(m, group)
-            or self._preferred(m.candidates, group.prefer)
-            or (m.candidates[0] if m.candidates else None)
+            or self._preferred(candidates, role or group.prefer)
+            or (candidates[0] if candidates else None)
         )
         if m.kind in WEAK_NAME_KINDS and chosen not in context:
             chosen = self._sole_employee(m) if m.kind == "first" else None
             if chosen is None:
                 return None
         return m.with_person(chosen)
+
+    def _profiled(self, m: Mention, text: str, candidates: tuple[str, ...]) -> str | None:
+        """A homonym no participant or nearby identifier settles: the one whose settled
+        mentions elsewhere in the corpus share the words around this one."""
+        if m.kind not in STRONG_NAME_KINDS or len(candidates) < 2 or not self.directory.profiles:
+            return None
+        window = fold(text[max(0, m.start - WINDOW) : m.end + WINDOW])
+        name = " ".join(fold(m.text).split())
+        return by_profile(candidates, window, name, self.directory.profiles)
+
+    def _split_homonyms(
+        self, mentions: list[Mention], siblings: list[Mention], text: str
+    ) -> list[Mention]:
+        """ "La PQR de Daniela Ordóñez con el extracto de Daniela Ordóñez: son dos clientas
+        distintas con el mismo nombre": the mention nearest its evidence keeps the person,
+        the others go to the other homonyms."""
+        if not DISTINCT_CUE.search(text):
+            return mentions
+        by_name: dict[tuple[str, str], list[int]] = defaultdict(list)
+        for i, m in enumerate(mentions):
+            if m.label == "NAME" and m.person_id and len(m.candidates) > 1:
+                by_name[(" ".join(fold(m.text).split()), m.person_id)].append(i)
+        out = list(mentions)
+        for (_, person_id), same in by_name.items():
+            if len(same) < 2:
+                continue
+            kept = min(same, key=lambda i: (self._evidence_gap(mentions[i], siblings), i))
+            others = [p for p in mentions[kept].candidates if p != person_id]
+            for i, other in zip((j for j in same if j != kept), others, strict=False):
+                out[i] = mentions[i].with_person(other)
+        return out
+
+    def _evidence_gap(self, m: Mention, siblings: list[Mention]) -> int:
+        gaps = [
+            _distance(s, m)
+            for s in siblings
+            if s is not m and self._evidence_owner(s) == m.person_id
+        ]
+        return min(gaps, default=10**9)
 
     def _judged(self, m: Mention, group: Group) -> str | None:
         if self.judge is None or m.kind not in STRONG_NAME_KINDS or len(m.candidates) < 2:
@@ -341,6 +421,30 @@ class Detector:
 
 def unconfuse(text: str) -> str:
     return RX_CONFUSABLE.sub(lambda m: CONFUSABLES[m.group(0)], text)
+
+
+def column_role(text: str, pos: int) -> str:
+    """ "client" or "employee" when `pos` sits in a markdown table column whose header says
+    so ("Cliente", "Agente", "Reporta a")."""
+    line_start = text.rfind("\n", 0, pos) + 1
+    line_end = text.find("\n", pos)
+    line = text[line_start : line_end if line_end != -1 else len(text)]
+    if not line.lstrip().startswith("|"):
+        return ""
+    column = text[line_start:pos].count("|") - 1
+    header_start = line_start
+    while header_start > 0:
+        previous = text.rfind("\n", 0, header_start - 1) + 1
+        if not text[previous : header_start - 1].lstrip().startswith("|"):
+            break
+        header_start = previous
+    if header_start == line_start:
+        return ""
+    header = text[header_start : text.find("\n", header_start)]
+    cells = [c.strip() for c in header.strip().strip("|").split("|")]
+    if column < 0 or column >= len(cells):
+        return ""
+    return COLUMN_ROLES.get(" ".join(fold(cells[column]).split()), "")
 
 
 def _distance(a: Mention, b: Mention) -> int:

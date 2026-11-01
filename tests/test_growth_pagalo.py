@@ -53,9 +53,11 @@ RENAMED = {
     "U0YDE69RK": ("cliente_id", "PG-9638"),
 }
 # Chat record naming one of those names bare → (renamed uid, True if it is the new person).
-# A participant of the thread wins; else the person whose identifiers are in the thread.
+# A participant of the thread wins; else words the name shares with its settled mentions in
+# other sources (f9679dfe: the "serie de educación financiera" is the journalist's, per the
+# marketing plan, not the new agent's welcomed in that thread); else the thread's identifiers.
 BARE_MENTIONS = {
-    "f9679dfe-a54c-5542-b942-262530651871": ("U0GPUPL6M", True),
+    "f9679dfe-a54c-5542-b942-262530651871": ("U0GPUPL6M", False),
     "120e5fb6-70d6-5115-ae0e-9fd210d1c351": ("U0GPUPL6M", True),
     "096d1e40-f04e-5e4d-a540-d1ace31e1841": ("U0YN91VJN", False),
     "7f546f7c-df00-5e83-bb69-f67fa72dd50f": ("U0YN91VJN", True),

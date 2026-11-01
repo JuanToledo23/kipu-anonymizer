@@ -50,6 +50,9 @@ class Directory:
         self.by_id: dict[tuple[str, str], str] = {}
         self.claimed: set[str] = set()
         self.created: set[str] = set()
+        # Cross-source homonym evidence of a corpus run (kipu.identity.homonyms); empty live.
+        self.references: dict[str, str] = {}
+        self.profiles: dict[str, frozenset[str]] = {}
 
     def add_seeds(self, seeds: list[PersonSeed], texts_by_uid: dict[str, str]) -> None:
         for cluster in resolve(seeds, texts_by_uid):

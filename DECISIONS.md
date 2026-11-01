@@ -55,10 +55,18 @@
   when the short form now equals a new person's name.
 - No person is created that cannot hold at least one identifier of its own: such a cluster is
   someone already known, and creating it would add an empty person on every run.
-- Mentions of homonyms are resolved by the nearest evidence (CL id, radicado, cédula, email),
-  then thread participants, then the owners of identifiers elsewhere in the thread, then persons
-  named unambiguously there; with none of those, the strong model judges on evidence in the text
-  (LLM runs), else source decides (employee in `empleados` and docs, client in client tables).
+- Mentions of homonyms are resolved by the nearest evidence (CL id, radicado, cédula, email, or
+  a code a `transacciones` description ties to one client, such as a credit request
+  `S-2608-01`), then thread participants, then the rare words they share with mentions of the
+  same name that an identifier settles in other sources (the journalist "publica como @arojas;
+  hará piezas sobre educación financiera" → "publicó la primera pieza de la serie de educación
+  financiera"), then the owners of identifiers elsewhere in the thread, then persons named
+  unambiguously there; with none of those, the strong model judges on evidence in the text (LLM
+  runs), else source decides (employee in `empleados` and docs, client in client tables). A doc
+  table column headed "Cliente" or "Agente" restricts the candidates to that kind. When the text
+  says two mentions of a name are two persons ("son dos clientas distintas con el mismo
+  nombre"), the mention nearest its evidence keeps the person and the other goes to the other
+  homonym.
 - `empleados.reporta_a` holds a name, not an id: it resolves to the one employee with that full
   or given + first surname name, who joins the row's context, so the cell carries the manager's
   pseudonym.

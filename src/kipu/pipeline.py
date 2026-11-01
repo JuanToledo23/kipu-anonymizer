@@ -19,6 +19,7 @@ from kipu.config import Settings, load_settings
 from kipu.directory.directory import Directory
 from kipu.directory.registry import Registry
 from kipu.directory.seed import seeds_from_tables, seeds_from_users
+from kipu.identity.homonyms import context_profiles, reference_keys
 from kipu.ingest.parsers import RawCorpus, load_corpus
 from kipu.ingest.source import DirSource, HttpSource, SourceClient
 from kipu.llm.layer import HookFactory, LLMLayer, RunPass
@@ -80,6 +81,10 @@ def build_directory(
     directory = Directory(registry)
     directory.add_seeds(
         seeds_from_tables(corpus.tables) + seeds_from_users(corpus.users), texts_by_uid
+    )
+    directory.references = reference_keys(corpus.tables, directory)
+    directory.profiles = context_profiles(
+        [record_text(r.model_dump()) for r in corpus.records()], directory
     )
     authors = {rid: directory.owner_of("uid", uid) for rid, uid in uid_by_record.items()}
     return directory, authors

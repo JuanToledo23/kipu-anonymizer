@@ -4,8 +4,8 @@ person of the registry instead of the few the public tests name.
   a  per person and original form (full/short name, cédula, email, phone, handle, display
      name; the given name only inside threads the person speaks in):
        a1 a raw record with the form is missing from the entity's `records`
-       a2 the record's output has none of the entity's name forms (full, given, file token);
-          `a2-id` when the raw record only had an identifier, which no rule can turn into a name
+       a2 the record's output has none of the entity's name forms (full, given, file token, slug);
+          `a2-id` when the raw record only had an identifier and no declared pseudonym is there
        a3 instead, another entity's name pseudonym is there (bare-mention misattribution)
        a4 the person has forms in the raw corpus but no entity
      plus a5: a name pseudonym in an output record where the raw record has no form of its
@@ -139,11 +139,19 @@ class World:
         if not name:
             return []
         parts = split_name(name)
-        return [name, parts.first, "_".join(strip_accents(name).lower().split())]
+        token = strip_accents(name).lower().split()
+        return [name, parts.first, "_".join(token), "-".join(token)]
 
     def has_name(self, person_id: str, record_id: str) -> bool:
         text = self.out.texts.get(record_id, "")
         return any(contiene(text, f) for f in self.name_forms(person_id))
+
+    def has_surrogate(self, person_id: str, record_id: str) -> bool:
+        """Any declared non-name pseudonym, the only proof a record with just an identifier
+        can give."""
+        text = self.out.texts.get(record_id, "")
+        pseudonyms = self.entities.get(person_id, {}).get("pseudonyms") or {}
+        return any(contiene(text, v) for k, v in pseudonyms.items() if k != "name" and v)
 
     def owners(self, record_id: str) -> set[str]:
         return {p for p in (self.author.get(record_id), self.row_owner.get(record_id)) if p}
@@ -249,7 +257,8 @@ def check_consistency(world: World, shared: dict[str, set[str]]) -> list[tuple[s
             if world.has_name(pid, rid) or not world.name_forms(pid):
                 continue
             if not kinds & {"full", "short", "given", "display"}:
-                findings.append(("a2-id", f"{pid} {rid} [{label}] only an identifier"))
+                if not world.has_surrogate(pid, rid):
+                    findings.append(("a2-id", f"{pid} {rid} [{label}] no declared pseudonym"))
                 continue
             others = [
                 o
@@ -402,8 +411,11 @@ def _homonym_lines(
         if not contiene(raw_line, form):
             continue
         used = [p for p in sorted(group) if _name_in(world, p, out_line)]
-        if len(norm(raw_line).split(key)) > 2 and DISTINCT_CUE.search(raw_line) and len(used) < 2:
-            findings.append(("c3", f"'{key}' {rid} two persons by the text, rendered as {used}"))
+        if len(norm(raw_line).split(key)) > 2 and DISTINCT_CUE.search(raw_line):
+            if len(used) < 2:
+                findings.append(
+                    ("c3", f"'{key}' {rid} two persons by the text, rendered as {used}")
+                )
             continue
         owner = (
             _line_owner(world, group, raw_line)

@@ -249,7 +249,7 @@ and the test that now covers it.
 - **Root cause**: a single capitalized token proposed as PERSON by one model is name-shaped, so it
   was accepted without adjudication; nothing told a product name from a person name.
 - **Fix**: a single-token PERSON is rejected if it is a common word (stoplist: Compré, Esposo,
-  Señora, Gracias, Hola, Listo, Dale...), and otherwise needs our given-name/surname lexicon or a
+  Señora, Gracias, Hola, Listo, Dale, Equipo...), and otherwise needs our given-name/surname lexicon or a
   client/employee role. A PERSON hit right after "campaña", "promoción", "promo", "programa",
   "plan", "producto" or "tarjeta" (optionally quoted, "tarjeta edición", "campaña de X se va a
   llamar") is a product name and is kept, also in the omission pass.

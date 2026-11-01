@@ -66,6 +66,7 @@ COMMON_WORDS = frozenset(
         "buenas",
         "listo",
         "dale",
+        "equipo",
         "buenos",
         "bueno",
         "vale",

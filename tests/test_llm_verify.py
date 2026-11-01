@@ -87,11 +87,16 @@ def test_record_ids_are_never_accounts() -> None:
 
 def test_common_words_are_not_persons(anonymizer: Anonymizer) -> None:
     v = verifier(anonymizer)
-    u = unit("Hola. Compré un televisor", "Crédito vehicular placa GTD596. Esposo autorizado")
+    u = unit(
+        "Hola. Compré un televisor",
+        "Crédito vehicular placa GTD596. Esposo autorizado",
+        "Saludos, Equipo Kipu",
+    )
     by_model = {
         PRIMARY: [
             Candidate(0, "Compré", "PERSON"),
             Candidate(1, "Esposo", "PERSON", "m", "third_party"),
+            Candidate(2, "Equipo", "PERSON", role="employee"),
         ],
         SECOND: [Candidate(0, "Compré", "PERSON", role="client")],
     }

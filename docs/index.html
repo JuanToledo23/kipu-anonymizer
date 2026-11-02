@@ -1,15 +1,15 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Systems Design — Vende los datos sin vender a la gente</title>
+<title>Systems Design — Sell the data without selling the people</title>
 <style>
   :root { --ink:#1b1f24; --muted:#5b6470; --line:#e3e6ea; --bg:#fafbfc; --card:#fff; --accent:#0f6b4f; --accent2:#e8f3ee; --warn:#8a4b00; --warn2:#fff4e5; --blue:#1d4ed8; --blue2:#e8eefc; }
   * { box-sizing:border-box; }
   body { margin:0; font-family: -apple-system, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif; color:var(--ink); background:var(--bg); line-height:1.45; }
-  main { max-width: 1040px; margin: 0 auto; padding: 36px 24px 60px; }
-  h1 { font-size: 28px; margin: 0 0 4px; letter-spacing:-0.01em; }
+  main { max-width: 1040px; margin: 0 auto; padding: 36px 24px 60px; position:relative; }
+  h1 { font-size: 28px; margin: 0 0 4px; letter-spacing:-0.01em; padding-right:96px; }
   .sub { color:var(--muted); margin:0 0 22px; font-size:15px; }
   h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 34px 0 12px; }
   p { margin: 0 0 10px; }
@@ -45,6 +45,11 @@
   .box .chips { margin:0 0 10px; }
   .chip { font-size:12px; background:#f1f3f5; color:#5b6470; border-radius:999px; padding:2px 8px; }
   code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; background:#f1f3f5; padding:1px 5px; border-radius:4px; }
+  .lang { display:none; position:absolute; top:36px; right:24px; align-items:center; gap:2px; background:var(--card); border:1px solid var(--line); border-radius:999px; padding:3px; font-size:12px; }
+  .js .lang { display:flex; }
+  .lang button { border:0; background:none; font:inherit; font-weight:600; color:var(--muted); padding:3px 9px; border-radius:999px; cursor:pointer; }
+  .lang button[aria-pressed="true"] { background:var(--accent); color:#fff; }
+  .lang .sep { color:var(--line); }
   .diagram { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; max-width:1000px; }
   .diagram svg { display:block; width:100%; height:auto; font-family: -apple-system, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif; }
   .diagram .nd { fill:#fff; stroke:var(--line); stroke-width:1.5; }
@@ -58,97 +63,98 @@
   .diagram .ail { stroke:var(--blue); stroke-width:1.3; stroke-dasharray:5 4; fill:none; }
   .diagram .back { stroke:var(--warn); stroke-width:1.5; stroke-dasharray:6 4; fill:none; }
   .diagram .disk { stroke:#8a939e; stroke-width:1.2; stroke-dasharray:3 3; fill:none; }
-  @media (max-width: 760px) { .three, .side { grid-template-columns: 1fr; } main { padding: 24px 16px 40px; } }
+  @media (max-width: 760px) { .three, .side { grid-template-columns: 1fr; } main { padding: 24px 16px 40px; } .lang { top:24px; right:16px; } }
   @page { size: A4; margin: 14mm; }
-  @media print { body { background:#fff; } main { padding:0; max-width:none; } .step, .box, .pill, .lead, .diagram { break-inside: avoid; } h2 { break-after: avoid; } .side { grid-template-columns: 1fr 1fr; } .three { grid-template-columns: repeat(3, 1fr); } }
+  @media print { body { background:#fff; } main { padding:0; max-width:none; } .js .lang { display:none; } h1 { padding-right:0; } .step, .box, .pill, .lead, .diagram { break-inside: avoid; } h2 { break-after: avoid; } .side { grid-template-columns: 1fr 1fr; } .three { grid-template-columns: repeat(3, 1fr); } }
 </style>
 </head>
 <body>
 <main>
-  <h1>Vende los datos sin vender a la gente</h1>
-  <p class="sub">Systems design · Juan Toledo · 31 oct 2026</p>
+  <div class="lang" role="group" aria-label="Language"><button type="button" data-lang="en" aria-pressed="true">EN</button><span class="sep">|</span><button type="button" data-lang="es" aria-pressed="false">ES</button></div>
+  <h1 data-i18n="h1">Sell the data without selling the people</h1>
+  <p class="sub"><span data-i18n="sub">Systems design · Juan Toledo · 31 Oct 2026</span></p>
   <p class="stack"><b>Stack:</b> Python 3.13 · FastAPI · SQLite · Docker · Fly.io · OpenRouter (Claude + Gemini)</p>
 
   <div class="lead">
-    <p><b>Qué resolvemos.</b> Kipu Pay quiere vender sus chats, documentos y tablas de soporte para entrenar un chatbot. Entregamos la misma información con cada persona real cambiada por una identidad inventada, creíble y consistente. Sin fugas, sin reescribir el texto, y sin cambiar seudónimos cuando lleguen datos nuevos.</p>
-    <p style="margin:0"><b>Cómo lo entregamos.</b> Un servicio HTTP que regenera la salida y anonimiza registros nuevos en vivo. El diccionario de quién es quién nunca sale del servidor.</p>
+    <p><b data-i18n="lead.what.h">What we solve.</b> <span data-i18n="lead.what">Kipu Pay wants to sell its support chats, documents and tables to train a chatbot. We deliver the same information with every real person swapped for an invented identity that is believable and consistent. No leaks, no rewriting of the text, and no pseudonym changes when new data arrives.</span></p>
+    <p style="margin:0"><b data-i18n="lead.how.h">How we deliver it.</b> <span data-i18n="lead.how">An HTTP service that regenerates the output and anonymizes new records live. The who-is-who dictionary never leaves the server.</span></p>
   </div>
 
-  <p class="principle"><b>Principio de diseño:</b> la IA propone, el código decide, ejecuta y verifica.</p>
+  <p class="principle"><b data-i18n="principle.h">Design principle:</b> <span data-i18n="principle">AI proposes; code decides, executes and verifies.</span></p>
 
-  <h2>Diagrama</h2>
+  <h2 data-i18n="h2.diagram">Diagram</h2>
   <div class="diagram">
-    <svg viewBox="0 0 1000 482" role="img" aria-label="Arquitectura: API de fuentes, siete módulos en secuencia, modelos de IA, registro en disco, salida y servicio HTTP">
+    <svg viewBox="0 0 1000 482" role="img" aria-label="Architecture: sources API, seven modules in sequence, AI models, on-disk registry, output and HTTP service" data-i18n-aria="svg.aria">
       <defs>
         <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a939e"/></marker>
         <marker id="ahw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a4b00"/></marker>
       </defs>
 
-      <!-- Servicio HTTP + vigilante (arriba a la derecha) -->
+      <!-- HTTP service + source watcher (top right) -->
       <rect class="nd" x="560" y="12" width="240" height="104" rx="12"/>
-      <text class="t" x="576" y="36">Servicio HTTP /v1</text>
+      <text class="t" x="576" y="36" data-i18n="dg.http">HTTP service /v1</text>
       <text class="mono" x="576" y="58">/health · /run · /output</text>
       <text class="mono" x="576" y="76">/anonymize · /entities</text>
-      <text class="s" x="576" y="100">regenera y sirve la salida</text>
+      <text class="s" x="576" y="100" data-i18n="dg.http.s">regenerates and serves the output</text>
       <rect class="nd" x="816" y="12" width="174" height="64" rx="12"/>
-      <text class="t" x="832" y="38">Vigilante de fuentes</text>
-      <text class="s" x="832" y="58">avisa si las fuentes crecen</text>
+      <text class="t" x="832" y="38" data-i18n="dg.watch">Source watcher</text>
+      <text class="s" x="832" y="58" data-i18n="dg.watch.s">alerts when sources grow</text>
 
-      <!-- API de fuentes -->
+      <!-- Sources API -->
       <rect class="nd" x="10" y="175" width="146" height="80" rx="12"/>
-      <text class="t" x="24" y="208">API de fuentes</text>
-      <text class="s" x="24" y="228">chats · docs · tablas</text>
+      <text class="t" x="24" y="208" data-i18n="dg.src">Sources API</text>
+      <text class="s" x="24" y="228" data-i18n="dg.src.s">chats · docs · tables</text>
       <line class="flowl" x1="156" y1="215" x2="178" y2="215" marker-end="url(#ah)"/>
 
-      <!-- Bus de IA -->
+      <!-- AI bus -->
       <path class="ail" d="M920,175 V150 H409 V175"/>
       <path class="ail" d="M503,150 V175 M597,150 V175 M785,150 V175"/>
       <rect class="nd" x="850" y="175" width="140" height="80" rx="12" style="stroke:#1d4ed8"/>
-      <text class="t" x="866" y="208" style="fill:#1d4ed8">Modelos de IA</text>
+      <text class="t" x="866" y="208" style="fill:#1d4ed8" data-i18n="dg.ai">AI models</text>
       <text class="s" x="866" y="228">Claude + Gemini</text>
 
-      <!-- Módulos 1–7 -->
+      <!-- Modules 1–7 -->
       <g>
         <rect class="mod" x="180" y="175" width="82" height="80" rx="12"/>
         <circle cx="198" cy="193" r="10" fill="#0f6b4f"/><text class="num" x="198" y="197" text-anchor="middle">1</text>
-        <text class="t" x="221" y="230" text-anchor="middle">Ingesta</text>
+        <text class="t" x="221" y="230" text-anchor="middle" data-i18n="dg.m1">Ingestion</text>
 
         <rect class="mod" x="274" y="175" width="82" height="80" rx="12"/>
         <circle cx="292" cy="193" r="10" fill="#0f6b4f"/><text class="num" x="292" y="197" text-anchor="middle">2</text>
-        <text class="t" x="315" y="225" text-anchor="middle">Directorio</text>
-        <text class="s" x="315" y="241" text-anchor="middle">de personas</text>
+        <text class="t" x="315" y="225" text-anchor="middle" data-i18n="dg.m2">Person</text>
+        <text class="s" x="315" y="241" text-anchor="middle" data-i18n="dg.m2.s">directory</text>
 
         <rect class="mod" x="368" y="175" width="82" height="80" rx="12"/>
         <circle cx="386" cy="193" r="10" fill="#0f6b4f"/><text class="num" x="386" y="197" text-anchor="middle">3</text>
         <text class="t" x="409" y="225" text-anchor="middle">Detector</text>
-        <text class="s" x="409" y="241" text-anchor="middle">reglas + IA</text>
+        <text class="s" x="409" y="241" text-anchor="middle" data-i18n="dg.m3.s">rules + AI</text>
 
         <rect class="mod" x="462" y="175" width="82" height="80" rx="12"/>
         <circle cx="480" cy="193" r="10" fill="#0f6b4f"/><text class="num" x="480" y="197" text-anchor="middle">4</text>
-        <text class="t" x="503" y="230" text-anchor="middle">Identidad</text>
+        <text class="t" x="503" y="230" text-anchor="middle" data-i18n="dg.m4">Identity</text>
 
         <rect class="mod" x="556" y="175" width="82" height="80" rx="12"/>
         <circle cx="574" cy="193" r="10" fill="#0f6b4f"/><text class="num" x="574" y="197" text-anchor="middle">5</text>
-        <text class="t" x="597" y="230" text-anchor="middle" style="font-size:11.5px">Seudónimos</text>
+        <text class="t" x="597" y="230" text-anchor="middle" style="font-size:11.5px" data-i18n="dg.m5">Pseudonyms</text>
 
         <rect class="mod" x="650" y="175" width="82" height="80" rx="12"/>
         <circle cx="668" cy="193" r="10" fill="#0f6b4f"/><text class="num" x="668" y="197" text-anchor="middle">6</text>
-        <text class="t" x="691" y="230" text-anchor="middle">Reemplazo</text>
+        <text class="t" x="691" y="230" text-anchor="middle" data-i18n="dg.m6">Replace</text>
 
         <rect class="mod" x="744" y="175" width="82" height="80" rx="12"/>
         <circle cx="762" cy="193" r="10" fill="#0f6b4f"/><text class="num" x="762" y="197" text-anchor="middle">7</text>
         <text class="t" x="785" y="230" text-anchor="middle">Auditor</text>
       </g>
 
-      <!-- Etiquetas IA (3, 4, 5, 7) -->
+      <!-- AI badges (3, 4, 5, 7) -->
       <g font-size="10" font-weight="700" fill="#1d4ed8" text-anchor="middle">
-        <rect x="430" y="185" width="16" height="13" rx="6.5" fill="#e8eefc"/><text x="438" y="195">IA</text>
-        <rect x="524" y="185" width="16" height="13" rx="6.5" fill="#e8eefc"/><text x="532" y="195">IA</text>
-        <rect x="618" y="185" width="16" height="13" rx="6.5" fill="#e8eefc"/><text x="626" y="195">IA</text>
-        <rect x="806" y="185" width="16" height="13" rx="6.5" fill="#e8eefc"/><text x="814" y="195">IA</text>
+        <rect x="430" y="185" width="16" height="13" rx="6.5" fill="#e8eefc"/><text x="438" y="195" data-i18n="tag.ai">AI</text>
+        <rect x="524" y="185" width="16" height="13" rx="6.5" fill="#e8eefc"/><text x="532" y="195" data-i18n="tag.ai">AI</text>
+        <rect x="618" y="185" width="16" height="13" rx="6.5" fill="#e8eefc"/><text x="626" y="195" data-i18n="tag.ai">AI</text>
+        <rect x="806" y="185" width="16" height="13" rx="6.5" fill="#e8eefc"/><text x="814" y="195" data-i18n="tag.ai">AI</text>
       </g>
 
-      <!-- Flechas entre módulos -->
+      <!-- Arrows between modules -->
       <line class="flowl" x1="262" y1="215" x2="272" y2="215" marker-end="url(#ah)"/>
       <line class="flowl" x1="356" y1="215" x2="366" y2="215" marker-end="url(#ah)"/>
       <line class="flowl" x1="450" y1="215" x2="460" y2="215" marker-end="url(#ah)"/>
@@ -156,20 +162,20 @@
       <line class="flowl" x1="638" y1="215" x2="648" y2="215" marker-end="url(#ah)"/>
       <line class="flowl" x1="732" y1="215" x2="742" y2="215" marker-end="url(#ah)"/>
 
-      <!-- Retorno 7 → 3 -->
+      <!-- Loop back 7 → 3 -->
       <path class="back" d="M765,276 V300 H395 V280" marker-end="url(#ahw)"/>
       <rect x="520" y="291" width="120" height="18" fill="#fff"/>
-      <text x="580" y="304" text-anchor="middle" font-size="11" font-weight="600" fill="#8a4b00">fuga → reprocesar</text>
+      <text x="580" y="304" text-anchor="middle" font-size="11" font-weight="600" fill="#8a4b00" data-i18n="dg.back">leak → reprocess</text>
 
-      <!-- Registro en disco + /anonymize en vivo -->
+      <!-- On-disk registry + live /anonymize -->
       <path class="disk" d="M315,276 V368 M503,276 V368 M597,276 V368"/>
       <rect class="nd" x="300" y="370" width="340" height="84" rx="12"/>
-      <text class="t" x="316" y="398">Registro en disco</text>
-      <text class="s" x="316" y="420">personas · seudónimos ·</text>
-      <text class="s" x="316" y="436">formas vistas · journal</text>
+      <text class="t" x="316" y="398" data-i18n="dg.reg">On-disk registry</text>
+      <text class="s" x="316" y="420" data-i18n="dg.reg.s1">persons · pseudonyms ·</text>
+      <text class="s" x="316" y="436" data-i18n="dg.reg.s2">seen forms · journal</text>
       <rect class="nd" x="150" y="370" width="126" height="84" rx="12"/>
       <text class="mono" x="213" y="404" text-anchor="middle" style="font-weight:600">/anonymize</text>
-      <text class="s" x="213" y="424" text-anchor="middle">en vivo</text>
+      <text class="s" x="213" y="424" text-anchor="middle" data-i18n="dg.live">live</text>
       <line class="flowl" x1="280" y1="412" x2="296" y2="412" marker-start="url(#ah)" marker-end="url(#ah)"/>
 
       <!-- output/ -->
@@ -177,8 +183,8 @@
       <rect class="nd" x="700" y="370" width="290" height="84" rx="12" style="stroke:#0f6b4f"/>
       <text class="t" x="716" y="398" style="fill:#0f6b4f">output/</text>
       <text class="s" x="716" y="420">chats · docs · tables · entities</text>
-      <text class="s" x="716" y="436">solo tras auditoría limpia</text>
-      <!-- Tecnología bajo cada caja -->
+      <text class="s" x="716" y="436" data-i18n="dg.out.s">only after a clean audit</text>
+      <!-- Technology under each box -->
       <g class="tech" text-anchor="middle">
         <text class="tech" x="83" y="268">httpx</text>
         <text class="tech" x="221" y="268">PyMuPDF · lxml</text>
@@ -198,72 +204,265 @@
     </svg>
   </div>
 
-  <h2>Arquitectura — el pipeline en 7 módulos</h2>
+  <h2 data-i18n="h2.arch">Architecture — the pipeline in 7 modules</h2>
   <div class="flow">
 
     <div class="step"><div class="num">1</div><div>
-      <h3>Ingesta <span class="tag">código</span></h3>
+      <h3><span data-i18n="m1.h">Ingestion</span> <span class="tag" data-i18n="tag.code">code</span></h3>
       <div class="chips"><span class="chip">httpx</span><span class="chip">PyMuPDF (PDF)</span><span class="chip">lxml (HTML/XML)</span><span class="chip">csv Latin-1</span><span class="chip">Pydantic</span></div>
-      <p class="what">Descarga chats, documentos y tablas del API y los lee completos, incluidos metadata, comentarios y nombres de archivo.</p>
-      <p class="why"><b>Por qué existe:</b> los datos personales también se esconden en los rincones.</p>
-      <p class="why how"><b>Cómo:</b> un cliente del API baja cada fuente; un lector por formato convierte todo al mismo esquema de registro (id, texto, metadata, adjuntos) y guarda una copia cruda en disco.</p>
+      <p class="what" data-i18n="m1.what">Downloads chats, documents and tables from the API and reads them in full, including metadata, comments and file names.</p>
+      <p class="why"><b data-i18n="why">Why it exists:</b> <span data-i18n="m1.why">personal data also hides in the corners.</span></p>
+      <p class="why how"><b data-i18n="how">How:</b> <span data-i18n="m1.how">an API client downloads each source; one reader per format converts everything to the same record schema (id, text, metadata, attachments) and keeps a raw copy on disk.</span></p>
     </div></div>
     <div class="arrow">↓</div>
 
     <div class="step"><div class="num">2</div><div>
-      <h3>Directorio de personas <span class="tag">código</span></h3>
+      <h3><span data-i18n="m2.h">Person directory</span> <span class="tag" data-i18n="tag.code">code</span></h3>
       <div class="chips"><span class="chip">Python</span><span class="chip">SQLite</span></div>
-      <p class="what">Arma la lista de quién existe desde las tablas maestras y Slack, y le da a cada persona un id interno fijo.</p>
-      <p class="why"><b>Por qué existe:</b> las tablas dicen quién es quién con certeza; el texto solo permite adivinar.</p>
-      <p class="why how"><b>Cómo:</b> lee clientes, empleados y usuarios de Slack; crea una persona por fila con todos sus identificadores y su jefe directo; le asigna un id interno que se guarda en SQLite.</p>
+      <p class="what" data-i18n="m2.what">Builds the list of who exists from the master tables and Slack, and gives each person a fixed internal id.</p>
+      <p class="why"><b data-i18n="why">Why it exists:</b> <span data-i18n="m2.why">the tables say who is who with certainty; the text only allows guessing.</span></p>
+      <p class="why how"><b data-i18n="how">How:</b> <span data-i18n="m2.how">reads clients, employees and Slack users; creates one person per row with all their identifiers and their direct manager; assigns an internal id that is stored in SQLite.</span></p>
     </div></div>
     <div class="arrow">↓</div>
 
     <div class="step"><div class="num">3</div><div>
-      <h3>Detector <span class="tag">código</span><span class="tag ai">IA</span></h3>
-      <div class="chips"><span class="chip">regex</span><span class="chip">validadores propios</span><span class="chip">OpenRouter: Claude + Gemini</span><span class="chip">json_schema</span></div>
-      <p class="what">Encuentra cada dato personal: reglas para lo que tiene formato, IA para nombres en texto libre. Solo se acepta lo que aparece literal.</p>
-      <p class="why"><b>Por qué existe:</b> solo reglas se pierden nombres; solo IA inventa y borra de más.</p>
-      <p class="why how"><b>Cómo:</b> primero corren las reglas sobre cada texto; luego el texto va a los modelos de IA, que devuelven las menciones exactas que encontraron; el código verifica que cada mención exista literal y descarta lo que está en la lista de conservados.</p>
+      <h3><span>Detector</span> <span class="tag" data-i18n="tag.code">code</span><span class="tag ai" data-i18n="tag.ai">AI</span></h3>
+      <div class="chips"><span class="chip">regex</span><span class="chip" data-i18n="chip.validators">custom validators</span><span class="chip">OpenRouter: Claude + Gemini</span><span class="chip">json_schema</span></div>
+      <p class="what" data-i18n="m3.what">Finds every piece of personal data: rules for anything with a format, AI for names in free text. Only what appears verbatim is accepted.</p>
+      <p class="why"><b data-i18n="why">Why it exists:</b> <span data-i18n="m3.why">rules alone miss names; AI alone invents and over-redacts.</span></p>
+      <p class="why how"><b data-i18n="how">How:</b> <span data-i18n="m3.how">the rules run first over each text; then the text goes to the AI models, which return the exact mentions they found; the code checks that each mention exists verbatim and drops anything on the keep list.</span></p>
     </div></div>
     <div class="arrow">↓</div>
 
     <div class="step"><div class="num">4</div><div>
-      <h3>Identidad <span class="tag">código</span><span class="tag ai">IA</span></h3>
-      <div class="chips"><span class="chip">union-find (Python)</span><span class="chip">SQLite</span><span class="chip">Claude (adjudicador)</span></div>
-      <p class="what">Decide a qué persona pertenece cada mención usando evidencia fuerte; la IA solo desempata y el código verifica su evidencia.</p>
-      <p class="why"><b>Por qué existe:</b> fundir dos personas en una, o partir una en dos, rompe el dataset.</p>
-      <p class="why how"><b>Cómo:</b> cada mención se une a una persona si comparte un dato fuerte; si solo coincide el nombre, se mantiene aparte; en los casos ambiguos un modelo de IA elige entre candidatos citando evidencia que el código comprueba.</p>
+      <h3><span data-i18n="m4.h">Identity</span> <span class="tag" data-i18n="tag.code">code</span><span class="tag ai" data-i18n="tag.ai">AI</span></h3>
+      <div class="chips"><span class="chip">union-find (Python)</span><span class="chip">SQLite</span><span class="chip" data-i18n="chip.adjudicator">Claude (adjudicator)</span></div>
+      <p class="what" data-i18n="m4.what">Decides which person each mention belongs to using strong evidence; AI only breaks ties, and the code verifies its evidence.</p>
+      <p class="why"><b data-i18n="why">Why it exists:</b> <span data-i18n="m4.why">merging two people into one, or splitting one into two, breaks the dataset.</span></p>
+      <p class="why how"><b data-i18n="how">How:</b> <span data-i18n="m4.how">a mention joins a person if it shares a strong identifier; if only the name matches, it stays apart; in ambiguous cases an AI model picks among candidates, citing evidence that the code checks.</span></p>
     </div></div>
     <div class="arrow">↓</div>
 
     <div class="step"><div class="num">5</div><div>
-      <h3>Seudónimos <span class="tag">código</span><span class="tag ai">IA</span></h3>
-      <div class="chips"><span class="chip">HMAC-SHA256</span><span class="chip">listas de nombres CO</span><span class="chip">SQLite UNIQUE</span><span class="chip">Claude (género/sector)</span></div>
-      <p class="what">Genera para cada persona una identidad falsa, creíble y determinista, y la guarda en un registro en disco.</p>
-      <p class="why"><b>Por qué existe:</b> la misma persona debe recibir el mismo seudónimo hoy, en vivo y mañana.</p>
-      <p class="why how"><b>Cómo:</b> a partir del id interno y un secreto se genera una semilla; con ella se eligen nombre, cédula, correo, celular y dirección de listas y generadores propios; se reservan en SQLite para que sean únicos y estables.</p>
+      <h3><span data-i18n="m5.h">Pseudonyms</span> <span class="tag" data-i18n="tag.code">code</span><span class="tag ai" data-i18n="tag.ai">AI</span></h3>
+      <div class="chips"><span class="chip">HMAC-SHA256</span><span class="chip" data-i18n="chip.names">Colombian name lists</span><span class="chip">SQLite UNIQUE</span><span class="chip" data-i18n="chip.gender">Claude (gender/sector)</span></div>
+      <p class="what" data-i18n="m5.what">Generates a fake, believable and deterministic identity for each person, and stores it in an on-disk registry.</p>
+      <p class="why"><b data-i18n="why">Why it exists:</b> <span data-i18n="m5.why">the same person must get the same pseudonym today, live, and tomorrow.</span></p>
+      <p class="why how"><b data-i18n="how">How:</b> <span data-i18n="m5.how">a seed is derived from the internal id and a secret; with it, name, national id (cédula), email, mobile number and address are picked from our own lists and generators; they are reserved in SQLite so they stay unique and stable.</span></p>
     </div></div>
     <div class="arrow">↓</div>
 
     <div class="step"><div class="num">6</div><div>
-      <h3>Reemplazo y generalización <span class="tag">código</span><span class="tag ai">IA</span></h3>
+      <h3><span data-i18n="m6.h">Replacement and generalization</span> <span class="tag" data-i18n="tag.code">code</span><span class="tag ai" data-i18n="tag.ai">AI</span></h3>
       <div class="chips"><span class="chip">Python</span><span class="chip">unicodedata</span></div>
-      <p class="what">Sustituye solo los fragmentos detectados respetando su forma, y generaliza lo que identifica sin nombrar.</p>
-      <p class="why"><b>Por qué existe:</b> el valor está en el texto original; reescribirlo lo altera.</p>
-      <p class="why how"><b>Cómo:</b> se sustituye cada mención por su seudónimo en la posición exacta, copiando la forma original (mayúsculas, sin tildes); ocupación, barrio y año se cambian por su versión general.</p>
+      <p class="what" data-i18n="m6.what">Replaces only the detected fragments, preserving their form, and generalizes whatever identifies someone without naming them.</p>
+      <p class="why"><b data-i18n="why">Why it exists:</b> <span data-i18n="m6.why">the value is in the original text; rewriting it alters it.</span></p>
+      <p class="why how"><b data-i18n="how">How:</b> <span data-i18n="m6.how">each mention is replaced by its pseudonym at the exact position, copying the original form (capitals, missing accents); occupation, neighborhood and year are swapped for their general version.</span></p>
     </div></div>
     <div class="arrow">↓</div>
 
     <div class="step"><div class="num">7</div><div>
-      <h3>Auditor independiente <span class="tag">código</span><span class="tag ai">IA</span></h3>
-      <div class="chips"><span class="chip">regex</span><span class="chip">unicodedata + confusables</span><span class="chip">hashlib</span><span class="chip">Claude (pasada final)</span></div>
-      <p class="what">Busca cada dato original en toda la salida; si encuentra una fuga, reprocesa ese registro y vuelve a auditar hasta cero.</p>
-      <p class="why"><b>Por qué existe:</b> una sola fuga invalida el dataset; nada sale sin verificación.</p>
-      <p class="why how"><b>Cómo:</b> normaliza toda la salida y busca cada dato original y sus hashes; una pasada de IA busca personas que las reglas no conocían; cualquier hallazgo vuelve al detector; al terminar arma el diccionario con lo que realmente encontró.</p>
+      <h3><span data-i18n="m7.h">Independent auditor</span> <span class="tag" data-i18n="tag.code">code</span><span class="tag ai" data-i18n="tag.ai">AI</span></h3>
+      <div class="chips"><span class="chip">regex</span><span class="chip">unicodedata + confusables</span><span class="chip">hashlib</span><span class="chip" data-i18n="chip.final">Claude (final pass)</span></div>
+      <p class="what" data-i18n="m7.what">Searches the whole output for every original value; if it finds a leak, it reprocesses that record and audits again until there are none.</p>
+      <p class="why"><b data-i18n="why">Why it exists:</b> <span data-i18n="m7.why">a single leak invalidates the dataset; nothing ships without verification.</span></p>
+      <p class="why how"><b data-i18n="how">How:</b> <span data-i18n="m7.how">normalizes the whole output and searches for each original value and its hashes; an AI pass looks for people the rules did not know about; any finding goes back to the detector; at the end it builds the dictionary from what it actually found.</span></p>
     </div></div>
   </div>
 
 </main>
+<script type="application/json" id="i18n">
+{
+  "en": {
+    "doc.title": "Systems Design — Sell the data without selling the people",
+    "h1": "Sell the data without selling the people",
+    "sub": "Systems design · Juan Toledo · 31 Oct 2026",
+    "lead.what.h": "What we solve.",
+    "lead.what": "Kipu Pay wants to sell its support chats, documents and tables to train a chatbot. We deliver the same information with every real person swapped for an invented identity that is believable and consistent. No leaks, no rewriting of the text, and no pseudonym changes when new data arrives.",
+    "lead.how.h": "How we deliver it.",
+    "lead.how": "An HTTP service that regenerates the output and anonymizes new records live. The who-is-who dictionary never leaves the server.",
+    "principle.h": "Design principle:",
+    "principle": "AI proposes; code decides, executes and verifies.",
+    "h2.diagram": "Diagram",
+    "svg.aria": "Architecture: sources API, seven modules in sequence, AI models, on-disk registry, output and HTTP service",
+    "dg.http": "HTTP service /v1",
+    "dg.http.s": "regenerates and serves the output",
+    "dg.watch": "Source watcher",
+    "dg.watch.s": "alerts when sources grow",
+    "dg.src": "Sources API",
+    "dg.src.s": "chats · docs · tables",
+    "dg.ai": "AI models",
+    "dg.m1": "Ingestion",
+    "dg.m2": "Person",
+    "dg.m2.s": "directory",
+    "dg.m3.s": "rules + AI",
+    "dg.m4": "Identity",
+    "dg.m5": "Pseudonyms",
+    "dg.m6": "Replace",
+    "dg.back": "leak → reprocess",
+    "dg.reg": "On-disk registry",
+    "dg.reg.s1": "persons · pseudonyms ·",
+    "dg.reg.s2": "seen forms · journal",
+    "dg.live": "live",
+    "dg.out.s": "only after a clean audit",
+    "h2.arch": "Architecture — the pipeline in 7 modules",
+    "tag.code": "code",
+    "tag.ai": "AI",
+    "why": "Why it exists:",
+    "how": "How:",
+    "chip.validators": "custom validators",
+    "chip.adjudicator": "Claude (adjudicator)",
+    "chip.names": "Colombian name lists",
+    "chip.gender": "Claude (gender/sector)",
+    "chip.final": "Claude (final pass)",
+    "m1.h": "Ingestion",
+    "m1.what": "Downloads chats, documents and tables from the API and reads them in full, including metadata, comments and file names.",
+    "m1.why": "personal data also hides in the corners.",
+    "m1.how": "an API client downloads each source; one reader per format converts everything to the same record schema (id, text, metadata, attachments) and keeps a raw copy on disk.",
+    "m2.h": "Person directory",
+    "m2.what": "Builds the list of who exists from the master tables and Slack, and gives each person a fixed internal id.",
+    "m2.why": "the tables say who is who with certainty; the text only allows guessing.",
+    "m2.how": "reads clients, employees and Slack users; creates one person per row with all their identifiers and their direct manager; assigns an internal id that is stored in SQLite.",
+    "m3.what": "Finds every piece of personal data: rules for anything with a format, AI for names in free text. Only what appears verbatim is accepted.",
+    "m3.why": "rules alone miss names; AI alone invents and over-redacts.",
+    "m3.how": "the rules run first over each text; then the text goes to the AI models, which return the exact mentions they found; the code checks that each mention exists verbatim and drops anything on the keep list.",
+    "m4.h": "Identity",
+    "m4.what": "Decides which person each mention belongs to using strong evidence; AI only breaks ties, and the code verifies its evidence.",
+    "m4.why": "merging two people into one, or splitting one into two, breaks the dataset.",
+    "m4.how": "a mention joins a person if it shares a strong identifier; if only the name matches, it stays apart; in ambiguous cases an AI model picks among candidates, citing evidence that the code checks.",
+    "m5.h": "Pseudonyms",
+    "m5.what": "Generates a fake, believable and deterministic identity for each person, and stores it in an on-disk registry.",
+    "m5.why": "the same person must get the same pseudonym today, live, and tomorrow.",
+    "m5.how": "a seed is derived from the internal id and a secret; with it, name, national id (cédula), email, mobile number and address are picked from our own lists and generators; they are reserved in SQLite so they stay unique and stable.",
+    "m6.h": "Replacement and generalization",
+    "m6.what": "Replaces only the detected fragments, preserving their form, and generalizes whatever identifies someone without naming them.",
+    "m6.why": "the value is in the original text; rewriting it alters it.",
+    "m6.how": "each mention is replaced by its pseudonym at the exact position, copying the original form (capitals, missing accents); occupation, neighborhood and year are swapped for their general version.",
+    "m7.h": "Independent auditor",
+    "m7.what": "Searches the whole output for every original value; if it finds a leak, it reprocesses that record and audits again until there are none.",
+    "m7.why": "a single leak invalidates the dataset; nothing ships without verification.",
+    "m7.how": "normalizes the whole output and searches for each original value and its hashes; an AI pass looks for people the rules did not know about; any finding goes back to the detector; at the end it builds the dictionary from what it actually found."
+  },
+  "es": {
+    "doc.title": "Systems Design — Vende los datos sin vender a la gente",
+    "h1": "Vende los datos sin vender a la gente",
+    "sub": "Diseño de sistemas · Juan Toledo · 31 oct 2026",
+    "lead.what.h": "Qué resolvemos.",
+    "lead.what": "Kipu Pay quiere vender sus chats, documentos y tablas de soporte para entrenar un chatbot. Entregamos la misma información con cada persona real cambiada por una identidad inventada, creíble y consistente. Sin fugas, sin reescribir el texto, y sin cambiar seudónimos cuando lleguen datos nuevos.",
+    "lead.how.h": "Cómo lo entregamos.",
+    "lead.how": "Un servicio HTTP que regenera la salida y anonimiza registros nuevos en vivo. El diccionario de quién es quién nunca sale del servidor.",
+    "principle.h": "Principio de diseño:",
+    "principle": "la IA propone, el código decide, ejecuta y verifica.",
+    "h2.diagram": "Diagrama",
+    "svg.aria": "Arquitectura: API de fuentes, siete módulos en secuencia, modelos de IA, registro en disco, salida y servicio HTTP",
+    "dg.http": "Servicio HTTP /v1",
+    "dg.http.s": "regenera y sirve la salida",
+    "dg.watch": "Vigilante de fuentes",
+    "dg.watch.s": "avisa si las fuentes crecen",
+    "dg.src": "API de fuentes",
+    "dg.src.s": "chats · docs · tablas",
+    "dg.ai": "Modelos de IA",
+    "dg.m1": "Ingesta",
+    "dg.m2": "Directorio",
+    "dg.m2.s": "de personas",
+    "dg.m3.s": "reglas + IA",
+    "dg.m4": "Identidad",
+    "dg.m5": "Seudónimos",
+    "dg.m6": "Reemplazo",
+    "dg.back": "fuga → reprocesar",
+    "dg.reg": "Registro en disco",
+    "dg.reg.s1": "personas · seudónimos ·",
+    "dg.reg.s2": "formas vistas · journal",
+    "dg.live": "en vivo",
+    "dg.out.s": "solo tras auditoría limpia",
+    "h2.arch": "Arquitectura — el pipeline en 7 módulos",
+    "tag.code": "código",
+    "tag.ai": "IA",
+    "why": "Por qué existe:",
+    "how": "Cómo:",
+    "chip.validators": "validadores propios",
+    "chip.adjudicator": "Claude (adjudicador)",
+    "chip.names": "listas de nombres CO",
+    "chip.gender": "Claude (género/sector)",
+    "chip.final": "Claude (pasada final)",
+    "m1.h": "Ingesta",
+    "m1.what": "Descarga chats, documentos y tablas del API y los lee completos, incluidos metadata, comentarios y nombres de archivo.",
+    "m1.why": "los datos personales también se esconden en los rincones.",
+    "m1.how": "un cliente del API baja cada fuente; un lector por formato convierte todo al mismo esquema de registro (id, texto, metadata, adjuntos) y guarda una copia cruda en disco.",
+    "m2.h": "Directorio de personas",
+    "m2.what": "Arma la lista de quién existe desde las tablas maestras y Slack, y le da a cada persona un id interno fijo.",
+    "m2.why": "las tablas dicen quién es quién con certeza; el texto solo permite adivinar.",
+    "m2.how": "lee clientes, empleados y usuarios de Slack; crea una persona por fila con todos sus identificadores y su jefe directo; le asigna un id interno que se guarda en SQLite.",
+    "m3.what": "Encuentra cada dato personal: reglas para lo que tiene formato, IA para nombres en texto libre. Solo se acepta lo que aparece literal.",
+    "m3.why": "solo reglas se pierden nombres; solo IA inventa y borra de más.",
+    "m3.how": "primero corren las reglas sobre cada texto; luego el texto va a los modelos de IA, que devuelven las menciones exactas que encontraron; el código verifica que cada mención exista literal y descarta lo que está en la lista de conservados.",
+    "m4.h": "Identidad",
+    "m4.what": "Decide a qué persona pertenece cada mención usando evidencia fuerte; la IA solo desempata y el código verifica su evidencia.",
+    "m4.why": "fundir dos personas en una, o partir una en dos, rompe el dataset.",
+    "m4.how": "cada mención se une a una persona si comparte un dato fuerte; si solo coincide el nombre, se mantiene aparte; en los casos ambiguos un modelo de IA elige entre candidatos citando evidencia que el código comprueba.",
+    "m5.h": "Seudónimos",
+    "m5.what": "Genera para cada persona una identidad falsa, creíble y determinista, y la guarda en un registro en disco.",
+    "m5.why": "la misma persona debe recibir el mismo seudónimo hoy, en vivo y mañana.",
+    "m5.how": "a partir del id interno y un secreto se genera una semilla; con ella se eligen nombre, cédula, correo, celular y dirección de listas y generadores propios; se reservan en SQLite para que sean únicos y estables.",
+    "m6.h": "Reemplazo y generalización",
+    "m6.what": "Sustituye solo los fragmentos detectados respetando su forma, y generaliza lo que identifica sin nombrar.",
+    "m6.why": "el valor está en el texto original; reescribirlo lo altera.",
+    "m6.how": "se sustituye cada mención por su seudónimo en la posición exacta, copiando la forma original (mayúsculas, sin tildes); ocupación, barrio y año se cambian por su versión general.",
+    "m7.h": "Auditor independiente",
+    "m7.what": "Busca cada dato original en toda la salida; si encuentra una fuga, reprocesa ese registro y vuelve a auditar hasta cero.",
+    "m7.why": "una sola fuga invalida el dataset; nada sale sin verificación.",
+    "m7.how": "normaliza toda la salida y busca cada dato original y sus hashes; una pasada de IA busca personas que las reglas no conocían; cualquier hallazgo vuelve al detector; al terminar arma el diccionario con lo que realmente encontró."
+  }
+}
+</script>
+<script>
+(function () {
+  var root = document.documentElement;
+  var dict;
+  try { dict = JSON.parse(document.getElementById("i18n").textContent); } catch (e) { return; }
+  var KEY = "kipu-docs-lang";
+
+  function fromUrl() {
+    var m = /[?&]lang=(en|es)\b/.exec(location.search);
+    if (m) return m[1];
+    var h = location.hash.replace("#", "");
+    return h === "en" || h === "es" ? h : null;
+  }
+  function stored() {
+    try { var v = localStorage.getItem(KEY); return v === "en" || v === "es" ? v : null; } catch (e) { return null; }
+  }
+  function apply(lang) {
+    var d = dict[lang] || dict.en;
+    var els = document.querySelectorAll("[data-i18n]");
+    for (var i = 0; i < els.length; i++) {
+      var v = d[els[i].getAttribute("data-i18n")];
+      if (v != null) els[i].textContent = v;
+    }
+    var aria = document.querySelectorAll("[data-i18n-aria]");
+    for (var j = 0; j < aria.length; j++) {
+      var a = d[aria[j].getAttribute("data-i18n-aria")];
+      if (a != null) aria[j].setAttribute("aria-label", a);
+    }
+    root.lang = lang;
+    if (d["doc.title"]) document.title = d["doc.title"];
+    var btns = document.querySelectorAll(".lang button");
+    for (var k = 0; k < btns.length; k++) {
+      btns[k].setAttribute("aria-pressed", btns[k].getAttribute("data-lang") === lang ? "true" : "false");
+    }
+  }
+  function choose(lang) {
+    apply(lang);
+    try { localStorage.setItem(KEY, lang); } catch (e) {}
+  }
+
+  root.className += " js";
+  apply(fromUrl() || stored() || "en");
+  var btns = document.querySelectorAll(".lang button");
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].addEventListener("click", function () { choose(this.getAttribute("data-lang")); });
+  }
+  window.addEventListener("hashchange", function () { var l = fromUrl(); if (l) choose(l); });
+})();
+</script>
 </body>
 </html>

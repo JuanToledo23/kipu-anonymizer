@@ -1,114 +1,121 @@
-# Failures found by the evaluator
+# Failure log
 
-Each entry: what the evaluator (validator, local tests or leak sweep) showed, why, what changed,
-and the test that now covers it.
+Every defect that an evaluator found before it reached the judge: the official validator
+(`validar.mjs`), the local evaluator and test families (`scripts/evaluate.py`), the hostile sweeps
+(`scripts/preflight.py`, `tests/redteam/`), the identity checkers (`scripts/identity_audit.py`,
+`scripts/judge_identity.py`) or code review. Each entry has a symptom, root cause, fix and the test
+that now covers it. Entries are numbered in the order they were found. Records are named by id
+only; no original value from the corpus appears here.
 
-## 1. Surrogate equal to another person's real value
+## 1. Surrogate equal to another person's real value (2026-10-31)
 
-- **Symptom**: `validar.mjs` on the real data reported `la forma original '1973-07-16' sigue en
-  la salida` for three `clientes` rows whose own birth dates had been replaced.
-- **Root cause**: a generated birth date can coincide with the real birth date of a different
-  person (only ~14,000 plausible dates), and the judge sweeps every real form in the whole output.
+- **Symptom**: on the real data, `validar.mjs` reported an original birth date "still in the
+  output" for three `clientes` rows whose own birth dates had been replaced.
+- **Root cause**: a generated birth date can match the real birth date of a different person
+  (there are only ~14,000 plausible dates). The judge sweeps every real form across the whole output.
 - **Fix**: `SurrogateFactory` takes an `is_real(field, value)` check backed by every identifier
   in the directory (including ones discovered during the run) and rejects such candidates.
 - **Test**: `tests/test_surrogates.py::test_real_values_are_never_reused`.
 
-## 2. Names split by a line break
+## 2. Names split by a line break (2026-10-31)
 
-- **Symptom**: the validator reported `'Jesús Sánchez' sigue en la salida` in `doc_04`.
-- **Root cause**: PyMuPDF breaks lines inside names ("Jesús\nSánchez"); the name matcher only
+- **Symptom**: the validator reported a full name still present in `doc_04`.
+- **Root cause**: PyMuPDF breaks lines inside names ("Given\nSurname"). The name matcher only
   allowed spaces, `_`, `.` and `-` between tokens, while the judge's `contiene` tolerates any
   whitespace.
 - **Fix**: the token gap also accepts a single line break, and name splitting uses `\s`.
 - **Test**: `tests/test_names.py::test_names_split_by_a_line_break`.
 
-## 3. "Luis Santander" resolved to the wrong homonym
+## 3. Employee/client homonym resolved to the client (2026-10-31)
 
-- **Symptom**: `reporta_a` of the employees reporting to the fraud coordinator showed a pseudonym
-  that matched no employee, breaking the "reports to" chain.
-- **Root cause**: "Luis Santander" names both an employee (KP-005) and a client (CL-21823); with
-  no context, the first candidate (the client) was chosen.
+- **Symptom**: in `empleados.reporta_a`, the employees reporting to the fraud coordinator showed a
+  pseudonym that matched no employee, breaking the "reports to" chain.
+- **Root cause**: the coordinator's name belongs to both an employee (KP-005) and a client
+  (CL-21823). With no context, the first candidate (the client) was chosen.
 - **Fix**: ties go to the source's natural population (employees in `empleados` and docs,
   clients in client tables), after nearby evidence (CL/KP ids, PQR radicados, identifiers) and
   thread context.
 - **Test**: `tests/test_render.py::test_reports_to_points_at_the_employee_homonym`.
 
-## 4. Registry reuse merged two people who shared an email
+## 4. Registry reuse merged two people who shared an email (2026-10-31)
 
-- **Symptom**: after the sample and the real run shared a registry, `/anonymize` gave Manuela
-  Castaño a brand-new pseudonym; her registry row had been renamed "Martina Castaño Martínez".
-- **Root cause**: the real cluster for Martina found Manuela's registry id through the shared
-  generated email `mcastano@gmail.com` and reused it, although their cédulas differ; lookups also
-  returned owners from outside the run, which the renderer could not see.
+- **Symptom**: after the sample and the real run shared a registry, `/anonymize` gave a sample
+  client a brand-new pseudonym, because their registry row had been renamed after a real-corpus
+  client.
+- **Root cause**: the real client's cluster found the sample client's registry id through a
+  generated email that both corpora share, and reused it although their cédulas differ. Lookups
+  also returned owners from outside the run, which the renderer could not see.
 - **Fix**: registry reuse applies cannot-link (different cédula, cliente_id, KP id or uid → no
-  reuse), and `Directory.owner_of` only returns persons of the current run.
+  reuse), and `Directory.owner_of` only returns persons of the current run. The sample now runs
+  with its own `DATA_DIR`.
 - **Test**: `tests/test_identity.py::test_shared_email_across_corpora_does_not_merge_persons`.
 
-## 5. Homonym candidates lost before context could decide
+## 5. Homonym candidates lost before context could decide (2026-10-31)
 
-- **Symptom**: live `/anonymize` mapped "Camila Arango (CL-12538)" and "Camila Arango
-  (CL-57176)" to the same pseudonym.
-- **Root cause**: the name index emitted one mention per variant kind ("full" for a user whose
-  whole name is "Camila Arango", "short" for the two clients); overlap resolution kept only the
-  "full" mention, so the clients were no longer candidates when the CL id was checked.
+- **Symptom**: live `/anonymize` mapped the same name next to CL-12538 and next to CL-57176
+  to one pseudonym.
+- **Root cause**: the name index emitted one mention per variant kind: "full" for a Slack user
+  whose whole name is that two-word form, and "short" for the two clients. Overlap resolution kept
+  only the "full" mention, so the clients were no longer candidates when the CL id was checked.
 - **Fix**: one mention per span carrying every strong candidate; the nearest evidence picks.
 - **Test**: `tests/test_names.py::test_one_mention_keeps_every_homonym_candidate` and
   `tests/test_render.py::test_homonyms_split_by_nearby_client_id`.
 
-## 6. Client handles leaked inside URLs and @mentions
+## 6. Client handles leaked inside URLs and @mentions (2026-10-31)
 
 - **Symptom**: the pre-flight sweep of the deployed output found the users.json handles of three
-  clients: `?ref=agomez&canal=chat`, `kit?u=khenao&lang=en` (chats) and `publica como @arojas`
-  (`doc_23`), next to a correctly replaced name.
-- **Root cause**: handles were only indexed as names when they had two tokens (`maria.lopez`);
-  single-token handles and email local parts were never matched, and `@` mentions of unknown
-  handles were not a detector at all. A dotted agent id shared with a client homonym
-  (`andres.gomez`) also resolved by name to the client instead of the employee who owns it.
+  clients: two inside URL query strings in chats (`?ref=<handle>&…`, `kit?u=<handle>&…`) and one
+  as `publica como @<handle>` in `doc_23`, next to a correctly replaced name.
+- **Root cause**: handles were only indexed as names when they had two tokens (`given.surname`).
+  Single-token handles and email local parts were never matched, and `@` mentions of unknown
+  handles had no detector at all. A dotted agent id shared with a client homonym also resolved by
+  name to the client instead of the employee who owns it.
 - **Fix**: `HANDLE` is a first-class identifier. `HandleMatcher` matches every known handle
   (users.json `name`, email local parts) case-insensitively as a whole token delimited by
-  non-alphanumerics, plus unknown `@handle` mentions; the surrogate is the local part of the
-  surrogate email, reserved in SQLite, and declared as `pseudonyms.handle`. Surrogate emails
+  non-alphanumerics, plus unknown `@handle` mentions. The surrogate is the local part of the
+  surrogate email, reserved in SQLite and declared as `pseudonyms.handle`. Surrogate emails
   never reuse a real handle as local part.
 - **Test**: `tests/test_handles.py` (URLs, paths, filenames, `@` mentions, boundaries, unknown
   handles, shared handles) and `tests/test_surrogates.py::test_handle_surrogate_follows_the_email_rule`.
 
-## 7. Plates with a separator were not detected
+## 7. Plates with a separator were not detected (2026-10-31)
 
-- **Symptom**: the sweep found `JXA-971` (chat `ea88fd5f…`) and `GTD-596`
-  (`transacciones:TX-000552`, `TX-000685`) unchanged; `GTD596` without the dash was replaced.
-- **Root cause**: the plate pattern only accepted `AAA123`/`AAA12A`; the generator for
-  same-shape surrogates also turned separators into digits.
+- **Symptom**: the sweep found two plates written `AAA-123` unchanged (one chat, and
+  `transacciones` rows TX-000552 and TX-000685), while the same plate without the dash was
+  replaced.
+- **Root cause**: the plate pattern only accepted `AAA123`/`AAA12A`, and the same-shape
+  surrogate generator also turned separators into digits.
 - **Fix**: plates accept a dash or space after the letters (currency codes and uppercase street
-  abbreviations excluded); the value is normalized to the compact form, so `GTD596` and
-  `GTD-596` share one surrogate, which is written back with the original separator. Plates seen
+  abbreviations excluded). The value is normalized to the compact form, so `AAA123` and
+  `AAA-123` share one surrogate, which is written back with the original separator. Plates seen
   anywhere in the input are reserved as real values before rendering.
 - **Test**: `tests/test_patterns.py::test_plates_both_classes_with_and_without_separators`,
   `test_plate_shaped_non_plates` and `tests/test_surrogates.py::test_surrogate_plate_keeps_its_class`.
 
-## 8. `/anonymize` declared a different name form than `entities.json`
+## 8. `/anonymize` declared a different name form than `entities.json` (2026-10-31)
 
 - **Symptom**: red-team cases B01, B05, B09, B12, B13 and B14 returned the right `entity_id` and
   surrogate, but `pseudonyms.name` was "Given Surname1 Surname2" live and "Given Surname1" in
-  `entities.json`. A record copied from our own output also created a new person (the pseudonym
-  author was read as an unknown name).
+  `entities.json`. A record copied from our own output also created a new person, because its
+  pseudonymized author was read as an unknown name.
 - **Root cause**: `declared_pseudonyms` declared the longest name form rendered in the records at
   hand, so the declared name depended on the batch. In the API, nothing knew which values were
   our own surrogates.
 - **Fix**: `pseudonyms.name` is always the registry's short form (given names + first surname).
-  In `entities.json`, the validator still requires the value to appear in the person's records,
-  so a person written only by given name declares that instead. The API (`live=True`) skips
-  surrogate names, emails, phones and cédulas from the registry that no real person owns: they
-  stay unchanged and are not declared.
+  The validator still requires the declared value to appear in the person's records in
+  `entities.json`, so a person written only by given name declares that instead. The API
+  (`live=True`) skips registry surrogate names, emails, phones and cédulas that no real person
+  owns; they stay unchanged and are not declared.
 - **Test**: `tests/test_canonical_name.py`,
   `tests/test_participants.py::test_live_mode_leaves_our_own_surrogates_alone`.
 
-## 9. Lowercase given names of thread participants
+## 9. Lowercase given names of thread participants (2026-10-31)
 
 - **Symptom**: 25 chats kept the agent's first name in a lowercase thank-you ("mil gracias!! x",
   "gracias x").
 - **Root cause**: a bare given name was only a candidate when capitalized.
 - **Fix**: lowercase given names (first or second given name) become `given_lower` mentions,
-  assigned only to a person in the group's context: thread authors and persons named by a strong
+  assigned only to a person in the group's context: thread authors, and persons named by a strong
   form or identifier in the thread, doc or row. There is no single-employee fallback. Given names
   that are everyday words (`luz`, `rosa`, `celeste`, ...) count only after a vocative (`gracias`,
   `hola`, `listo`, `ok`, `dale`, ...) or at the end of the message. The surrogate keeps the
@@ -116,17 +123,17 @@ and the test that now covers it.
 - **Test**: `tests/test_participants.py::test_lowercase_given_name_of_a_thread_participant`,
   `test_everyday_word_names_only_as_vocative`.
 
-## 10. Names written with Cyrillic/Greek look-alike letters
+## 10. Names written with Cyrillic/Greek look-alike letters (2026-10-31)
 
-- **Symptom**: red-team case B02 ("Lаdy" with Cyrillic а/е/о) was neither detected nor linked,
-  but the validator's `norm` folds the same letters, so it counted as a leak.
+- **Symptom**: red-team case B02 (a given name typed with Cyrillic а/е/о) was neither detected
+  nor linked. The validator's `norm` folds the same letters, so it counted as a leak.
 - **Root cause**: detection ran on the raw text.
 - **Fix**: detection runs on a Latin view built from validar.mjs's `CONFUSABLES` table (every
   entry maps one character to one character, so offsets are unchanged). `fold` applies the same
   map. Replacements apply to the original offsets, so the whole look-alike span is replaced.
 - **Test**: `tests/test_participants.py::test_cyrillic_lookalikes_are_detected`.
 
-## 11. Slack display names used as sign-offs
+## 11. Slack display names used as sign-offs (2026-10-31)
 
 - **Symptom**: chat `690a150c…` ended with the author's own users.json `display_name`, unchanged.
 - **Root cause**: `display_name` was never a name form.
@@ -136,14 +143,14 @@ and the test that now covers it.
   tokens are forbidden in surrogates.
 - **Test**: `tests/test_participants.py::test_display_name_signoff_is_replaced`.
 
-## 12. Identifiers went to the chat author instead of the person named before them
+## 12. Identifiers went to the chat author instead of the person named before them (2026-10-31)
 
 - **Symptom**: on the deployed service, red-team cases B10 ("Soy <known full name>, CC <new
   number>") and B11 (two unknown homonyms with different cédulas in one batch) created no new
   person: the cédula went to the author of the copied chat. The local run passed only because
   the harness counted a stale registry person behind the author as "new". With a stricter
   harness, B08 and B11 also showed unknown names cut at the lexicon's edge: a given name missing
-  from the lexicon ("soy Wendy ...") and an unlisted second surname stayed in the text.
+  from the lexicon and an unlisted second surname stayed in the text.
 - **Root cause**: an identifier was linked to a preceding name only within 4 characters
   (", CC " is 5), and before that the client author won. An identifier contradicting a
   person's cédula was attached anyway (unknown names) or dropped to an anonymous person. The
@@ -151,7 +158,7 @@ and the test that now covers it.
 - **Fix**: a new identifier goes to the nearest strong or unknown full name before it in the
   same sentence, up to 40 characters away, before the author or row-owner fallbacks. If that
   person already has a different cédula (or another one-per-person id), the name belongs to a
-  homonym: a new person keyed by name + identifier, and the name mention is re-owned so it gets
+  homonym: a new person keyed by name + identifier, with the name mention re-owned so it gets
   its own pseudonym. A new identifier of a type the person lacks (a first phone, an email) is
   added to the same person. An unknown name also absorbs one following capitalized word
   (second surname) and, after "soy"/"me llamo"/"mi nombre es", one preceding one. Kept
@@ -161,25 +168,24 @@ and the test that now covers it.
   person, two homonyms → two persons, 5–40 character gaps, widened unknown names, kept terms
   not widened).
 
-## 13. Growth-intolerant ingestion
+## 13. Growth-intolerant ingestion (2026-10-31)
 
-- **Symptom**: with a grown copy of the sources, a table or doc format outside the output
-  schema crashed the whole run (`TableRecord.table` literal); a date or doc listed but answering
-  404 failed the run; a 304 whose cached copy was gone produced an empty body; a connection
-  error surfaced as a bare httpx error without the URL. `DirSource` read four hardcoded table
-  files.
+- **Symptom**: on a grown copy of the sources, a table or doc format outside the output schema
+  crashed the whole run (`TableRecord.table` literal). So did a date or doc that was listed but
+  answered 404. A 304 whose cached copy was gone produced an empty body, and a connection error
+  surfaced as a bare httpx error without the URL. `DirSource` read four hardcoded table files.
 - **Root cause**: ingestion assumed the listings and the cache were always consistent.
 - **Fix**: `DirSource` lists tables from the saved `_index.json` (or the files present) and
   CSVs take charset and separator from the listing. Missing dates, channels without a dates
-  listing, missing docs and tables are skipped with a log line; tables or doc formats outside
-  the output schema are skipped with a warning. A 304 without a cached copy refetches
+  listing, missing docs and missing tables are skipped with a log line. Tables or doc formats
+  outside the output schema are skipped with a warning. A 304 without a cached copy refetches
   unconditionally. Failures raise `SourceError` naming the URL and the attempts.
 - **Test**: `tests/test_ingest_growth.py`.
 
-## 14. A run and /anonymize could race on the registry
+## 14. A run and /anonymize could race on the registry (2026-10-31)
 
-- **Symptom**: found by review while adding concurrency tests: two connections (a run and an
-  `/anonymize` batch) could both decide a person or a surrogate did not exist yet.
+- **Symptom**: found by code review while adding concurrency tests: two connections (a run and an
+  `/anonymize` batch) could both decide that a person or a surrogate did not exist yet.
 - **Root cause**: `external_person` and surrogate reservation were check-then-insert across
   separate statements, the write lock was per connection, and `BEGIN` was deferred (a
   read-then-write transaction can fail with `SQLITE_BUSY` instead of waiting). A lost
@@ -191,87 +197,89 @@ and the test that now covers it.
 - **Test**: `tests/test_service.py::test_parallel_anonymize_batches_share_new_persons`,
   `test_anonymize_answers_during_a_run_and_the_run_keeps_its_persons`.
 
-## 15. Jobs lost on restart; a failure before the pipeline left a job running
+## 15. Jobs lost on restart; a failure before the pipeline left a job running (2026-10-31)
 
-- **Symptom**: after a restart `GET /run/{id}` answered 404 for every earlier job. An error
+- **Symptom**: after a restart, `GET /run/{id}` answered 404 for every earlier job. An error
   while building the source client (before the `try`) left the job `running` forever.
 - **Root cause**: jobs lived only in memory, and the job body started outside the error handler.
-- **Fix**: the job list persists in `$DATA_DIR/jobs.json` (atomic write on every change); jobs
-  found `queued`/`running` at startup become `failed` ("interrupted"). The whole job body runs
+- **Fix**: the job list persists in `$DATA_DIR/jobs.json` (atomic write on every change), and
+  jobs found `queued`/`running` at startup become `failed` ("interrupted"). The whole job body runs
   inside the handler, which records the error and the finish time.
 - **Test**: `tests/test_service.py::test_output_entities_and_jobs_survive_a_restart`,
   `test_a_run_interrupted_by_a_restart_is_reported_failed`,
   `test_unexpected_pipeline_error_fails_the_job_and_keeps_the_output`.
 
-## 16. A re-listed client became a second person
+## 16. A re-listed client became a second person (2026-10-31)
 
-- **Symptom**: the Págalo migration lists 12 existing clients again as `PG-…` rows (same name,
-  cédula, email, phone). 7 of them got a new person with a second name and barrio pseudonym
-  while sharing the old person's cédula, email and phone surrogates; the other 5 landed on the
-  old person only through a PQR that named the `PG-` id.
+- **Symptom**: the Págalo migration lists 12 existing clients again as `PG-…` rows with the same
+  name, cédula, email and phone. 7 of them got a new person with a second name and barrio
+  pseudonym, while sharing the old person's cédula, email and phone surrogates. The other 5 landed
+  on the old person only because a PQR named the `PG-` id.
 - **Root cause**: cannot-link forbade two `clientes` rows in one cluster, so the outcome
   depended on which seed claimed the shared identifiers first.
-- **Fix**: two client rows sharing the cédula and an email or phone merge; the oldest row's
+- **Fix**: two client rows sharing the cédula and an email or phone merge, and the oldest row's
   profile wins. Name-only or contact-only matches still never merge.
 - **Test**: `tests/test_identity.py::test_relisted_client_row_joins_the_person_on_cedula_and_contact`,
   `test_client_rows_sharing_less_than_cedula_and_contact_stay_apart`,
   `tests/test_growth_pagalo.py::test_duplicate_client_rows_are_the_old_person`.
 
-## 17. Empty persons created on every run
+## 17. Empty persons created on every run (2026-10-31)
 
-- **Symptom**: on the grown corpus each run created 10 client persons with no identifiers and no
-  surrogates; a rerun on the same snapshot created 10 more (276 → 286).
+- **Symptom**: on the grown corpus, each run created 10 client persons with no identifiers and no
+  surrogates. A rerun on the same snapshot created 10 more (276 → 286).
 - **Root cause**: a cluster whose identifiers all belonged to persons already claimed in the run
-  (the split duplicates of #16) still got a new registry person, which then could attach
-  nothing and so was never found again.
+  (the split duplicates of #16) still got a new registry person. That person could attach
+  nothing, so it was never found again.
 - **Fix**: a cluster that cannot hold any identifier of its own creates no person; its records
   resolve through the owners of their identifiers.
 - **Test**: `tests/test_identity.py::test_no_person_is_created_without_an_identifier_of_its_own`,
   `tests/test_growth_pagalo.py::test_rerun_creates_nobody_and_is_byte_identical`.
 
-## 18. A Págalo client id declared as an account number
+## 18. A Págalo client id declared as an account number (2026-10-31)
 
-- **Symptom**: the first LLM run on the grown corpus wrote `Cliente PG-3773` in a PDF and a chat
-  reply `PG-3773` as account surrogates; the id became a declared original of its person, so
-  every transacciones row that keeps `cliente_id` was an audit leak (38 records).
-- **Root cause**: record keys were hardcoded as `CL-`, `KP-`, `TX-`, `PQR-`; the new `PG-` prefix
-  passed the verifier's account shape check and was not evidence for the rules either.
+- **Symptom**: the first LLM run on the grown corpus wrote a `PG-` client id from a PDF and a chat
+  reply as account surrogates. The id became a declared original of its person, so every
+  `transacciones` row that keeps `cliente_id` became an audit leak (38 records).
+- **Root cause**: record keys were hardcoded as `CL-`, `KP-`, `TX-`, `PQR-`. The new `PG-` prefix
+  passed the verifier's account shape check, and the rules did not treat it as evidence either.
 - **Fix**: `PG-` ids are record keys (cliente_id) for the rules and are never accounts for the
   verifier.
 - **Test**: `tests/test_llm_verify.py::test_record_ids_are_never_accounts`,
   `tests/test_render.py::test_pagalo_client_id_in_text_is_evidence_for_the_homonym`.
 
-## 19. Common words and campaign names replaced as persons
+## 19. Common words and campaign names replaced as persons (2026-10-31)
 
 - **Symptom**: the LLM replay of the grown corpus replaced `Hola. Compré un televisor` →
-  `Hola. Lorenzo ...`, `placa ... Esposo autorizado` → `Alfonso autorizado`, and the campaign
-  name in `Campaña "María"` / `se va a llamar 'María'` → `Miriam` / `Nidia`.
+  `Hola. Lorenzo ...` and `placa ... Esposo autorizado` → `Alfonso autorizado`. It also replaced
+  the campaign name in `Campaña "María"` / `se va a llamar 'María'` with `Miriam` / `Nidia`.
 - **Root cause**: a single capitalized token proposed as PERSON by one model is name-shaped, so it
-  was accepted without adjudication; nothing told a product name from a person name.
+  was accepted without adjudication. Nothing told a product name from a person name.
 - **Fix**: a single-token PERSON is rejected if it is a common word (stoplist: Compré, Esposo,
-  Señora, Gracias, Hola, Listo, Dale, Equipo...), and otherwise needs our given-name/surname lexicon or a
-  client/employee role. A PERSON hit right after "campaña", "promoción", "promo", "programa",
-  "plan", "producto" or "tarjeta" (optionally quoted, "tarjeta edición", "campaña de X se va a
-  llamar") is a product name and is kept, also in the omission pass.
+  Señora, Gracias, Hola, Listo, Dale, Equipo...). Otherwise it needs our given-name/surname
+  lexicon or a client/employee role. A PERSON hit right after "campaña", "promoción", "promo",
+  "programa", "plan", "producto" or "tarjeta" (optionally quoted, "tarjeta edición", "campaña de
+  X se va a llamar") is a product name and is kept, also in the omission pass.
 - **Test**: `tests/test_llm_verify.py::test_common_words_are_not_persons`,
   `test_lone_token_needs_lexicon_or_named_role`, `test_campaign_names_are_products`.
 
-## 20. Homonyms settled by the wrong evidence
+## 20. Homonyms settled by the wrong evidence (2026-10-31)
 
-- **Symptom**: `scripts/judge_identity.py` on the deployed run-2 output (`data/preflight_v5`)
-  found four homonym mentions with the other person's pseudonym: `doc_14` credit request
-  `S-2608-01 | Mateo Henao` (the transaction for that request is CL-37620's), `doc_16`'s ticket
-  table where the client column said `Laura Ospina` (rendered as the agent of that name),
-  chat `c710e9b6` "la PQR-2026-0451 de Daniela Ordóñez con el extracto de Daniela Ordóñez: son
-  dos clientas distintas con el mismo nombre" (both as the PQR owner), and chat `f9679dfe`
-  "Alejandra Rojas publicó la primera pieza de la serie de educación financiera" (the new agent
-  welcomed in that thread instead of the journalist of the marketing plan).
+- **Symptom**: `scripts/judge_identity.py` on the deployed run-2 output found four homonym
+  mentions carrying the other person's pseudonym:
+  - `doc_14`: credit request `S-2608-01` next to a client name. The transaction for that request
+    belongs to CL-37620, but the other homonym was picked.
+  - `doc_16`: the ticket table's client column named a client, rendered as the agent with the
+    same name.
+  - Chat `c710e9b6`: two mentions of a name, explicitly "son dos clientas distintas con el mismo
+    nombre", both rendered as the PQR owner.
+  - Chat `f9679dfe`: a journalist from the marketing plan (`doc_23`), rendered as the new agent
+    with the same name who was welcomed in that thread.
 - **Root cause**: the tie-break lived outside the name and outside the record: in a transaction
   description, in a table header, in the sentence itself, or in another document. Docs prefer
-  employees; one radicado settled every mention within 80 characters; thread context beat
+  employees. One radicado settled every mention within 80 characters, and thread context beat
   everything after participants.
-- **Fix**: transaction codes are evidence for their client; a "Cliente"/"Agente" column header
-  restricts the candidates; a "same name, different persons" cue splits repeated mentions; rare
+- **Fix**: transaction codes are evidence for their client, and a "Cliente"/"Agente" column header
+  restricts the candidates. A "same name, different persons" cue splits repeated mentions. Rare
   words shared with identifier-settled mentions elsewhere in the corpus rank after participants
   and before thread context. Pseudonyms of every existing person are unchanged.
 - **Test**: `tests/test_homonyms.py`, `tests/test_growth_pagalo.py` (`f9679dfe` now expects the

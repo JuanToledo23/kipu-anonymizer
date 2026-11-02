@@ -1,117 +1,184 @@
-# Kipu Pay anonymizer
+# Kipu Anonymizer
 
-Pseudonymization service for the Frontier challenge "Vende los datos sin vender a la gente"
-(brief in `ENUNCIADO.md`). It downloads Kipu Pay's support chats, internal documents and tables
-from the sources API, replaces every personal datum with a consistent, same-category pseudonym,
-generalizes quasi-identifiers, and serves the four `output/` files plus a live `/anonymize`
-endpoint (`api/participante.openapi.yaml`). Rules only for now; no LLM calls.
+**English** · [Español](README.es.md)
 
-## Run
+> Sell the data without selling the people: consistent, verifiable pseudonymization of
+> support chats, documents and tables.
 
-```bash
-cp .env.example .env          # fill FUENTES_URL, FUENTES_TOKEN and a random PSEUDONYM_SECRET
-make install
-./run.sh                      # http://localhost:9000/v1/health
-```
+Kipu Pay, a Colombian fintech, wants to sell its customer-support corpus to train a chatbot. The
+corpus is full of personal data: names, cédulas, phones, emails, plates, addresses, and details
+that identify someone without naming them. This service regenerates the whole corpus with every
+real person replaced by an invented, same-category identity that stays the same across records,
+across runs and as the sources grow. Only the detected fragments change; every other byte of
+each record is left as it was. It was built for the Frontier challenge
+"Vende los datos sin vender a la gente".
 
-Batch run without the service:
+## Results
 
-```bash
-uv run python -m kipu.pipeline --source http --out data/out_full    # live API, DATA_DIR=data, raw in data/raw/
-DATA_DIR=data/sample_run uv run python -m kipu.pipeline --source dir:data/sample/input \
-  --out data/sample_run/output                                           # sample, own registry
-```
+| Official evaluation (hidden test set) | Score | Notes |
+|---|---:|---|
+| Run 1: rules only | **81 / 95** | 92.5 / 100, **1st of 7 teams** |
+| Run 2: rules + LLM layer | **146 / 156** | **zero direct leaks** from this run on |
+| Run 3: 100 % of the set | **197 / 205** | easy 94/94 · hard 40/43 |
 
-LLM layer flags (`.env`; the layer needs `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY` is the fallback):
+| Cost per full regeneration (10,856 records) | |
+|---|---|
+| With the LLM layer, cold cache | **≈ US$2**, **~9 min** (3.4 M input + 1.2 M output tokens) |
+| Rules only | **~6 s** |
+| Rerun with warm cache | US$0, ~19 s |
 
-- `LLM_ENABLED` (default `true`): `false` runs rules only.
-- `LLM_MAX_COST_USD` (default `5`): per-run cap; once reached, no more calls and the run goes on with rules only.
-- `LLM_PRIMARY` / `LLM_SECOND` / `LLM_STRONG`: model slug overrides (defaults `anthropic/claude-haiku-5.5`, `google/gemini-3.5-flash-lite`, `anthropic/claude-sonnet-5.5`).
-
-Every route is served at both `/v1/...` and `/...`. With `ENTRYPOINT_TOKEN` set, all routes
-require `Authorization: Bearer <token>` except `GET /health` (no secrets in it).
-`GET /health` and `POST /anonymize` allow CORS from any origin (methods GET, POST, OPTIONS;
-header `Content-Type`) for the public demo page; the other routes send no CORS headers.
-
-Real runs use `DATA_DIR=data`; the sample always uses `DATA_DIR=data/sample_run` so its persons
-never enter the real registry.
-
-Docker: `make docker-build` then
-`docker run -p 9000:9000 --env-file .env -v kipu-data:/data kipu-anonymizer`.
-Keep the `/data` volume: it holds the registry that keeps pseudonyms stable between runs.
-
-### Service state
-
-Everything the service needs after a restart lives under `$DATA_DIR`: `output/` (the last
-completed run, swapped in atomically, so a failed run never touches it), `jobs.json` (the job
-list, so `GET /run/{id}` answers after a restart; a job that was running when the process died
-is reported `failed` with "interrupted") and `registry.sqlite` (persons and surrogates, never
-rebuilt). `POST /run` uses `sources_url` and `token` from the body; `FUENTES_URL` and
-`FUENTES_TOKEN` only fill a missing field. Any error in a run marks the job `failed` with the
-message and the previous output keeps being served.
-
-The sources client has connect (10 s) and read (60 s) timeouts and retries 429/5xx and transport
-errors with exponential backoff (`Retry-After` honored), so one flaky page does not fail a run.
-Channels, dates, docs and tables are enumerated from the API listings; a listed date or doc
-that answers 404 is skipped with a log line. Each run logs one summary line
-(`persons reused=… created=…, records chats=… docs=… tables=…, seconds=…`).
-
-`/anonymize` batches run one at a time against the registry, also while a run is in progress.
-The registry is SQLite in WAL mode (busy timeout 30 s); every write goes through one
-process-wide lock in an IMMEDIATE transaction, and creating a person or reserving a surrogate is
-an atomic get-or-create, so a person created by `/anonymize` during a run keeps its pseudonym.
-
-Production runs on Fly.io (`https://kipu-anonymizer.fly.dev/v1`); see [docs/deploy.md](docs/deploy.md)
-for deploys, secrets and logs. Never deploy while an evaluation run is in progress.
-
-## Evaluate
-
-```bash
-make evaluate-sample   # sample run (DATA_DIR=data/sample_run), validar.mjs, the 13 sample tests and a field diff vs expected_output
-make evaluate-full     # live run, validar.mjs and the 5 public tests
-```
-
-`scripts/evaluate.py <out> --public <dir> [--tests f.json ...] [--expected <dir>]` runs the
-validator, every test by family (directa, oculta, falso_positivo, homonimos, consistencia,
-indirecta) and exits 1 on any failure.
-
-```bash
-make preflight                                        # sweep data/out_full vs the newest data/raw/<run>
-make preflight PREFLIGHT_OUT=data/preflight PREFLIGHT_RAW=data/raw/<run>
-```
-
-`scripts/preflight.py <out> --raw <data/raw/<run>> [--public <dir>]` is the hostile sweep run
-before requesting an evaluation. With the judge's `contiene` it looks for every master-table
-value (clientes, empleados, cédula and agente of pqrs), every users.json name, handle, email and
-phone, and every person or email in doc metadata; it lists emails, phones, plates and cédulas in
-the output that are not declared surrogates, searches UPPERCASE-without-accents name forms, and
-checks structure against `record_index.json` (ids once, columns, metadata keys, attachments). It
-prints a table and exits 1 on any real hit. Categorical columns (`tipo_doc`, `barrio`,
-`ocupacion`, `notas`) and plain amounts are not counted.
-
-`scripts/quasi_check.py <out> --raw <data/raw/<run>>` lists, per person with a master row, the output records where their barrio/ocupación/año (cargo/ciudad/ingreso for employees) still co-occur, each record joined to the person's output master row; exits 1 on any record with all three.
-
-`scripts/identity_audit.py <out> --raw <data/raw/<run>> --registry <registry.sqlite> [--baseline <entities.json>]` audits identity (same-name persons, unlinked chat users, missed records, forms declared by two entities, pseudonyms changed since a baseline) on a copy of the registry.
-
-## Watching the sources
-
-The sources API grows at some point without notice. `scripts/watch_sources.py` (not part of the
-service) polls `GET /record_index` every 2 minutes with `If-None-Match`, prints the id count per
-source, and on any change prints a `!!!!! SOURCES CHANGED !!!!!` line and writes
-`data/sources_changed.flag` with the old and new counts. Its last ETag and counts persist in
-`data/sources_watch.json`; the first baseline is `data/fuentes/record_index.json`.
-
-```bash
-uv run python scripts/watch_sources.py            # FUENTES_URL / FUENTES_TOKEN from .env
-uv run python scripts/watch_sources.py --once     # single poll
-```
+When the sources grew by 2,559 records (an acquired company's portfolio), no existing pseudonym
+changed.
 
 ## Architecture
 
-1. **Ingest**: `HttpSource`/`DirSource` → normalized chat, doc and table records.
-2. **Directory + identity**: persons seeded from clientes, empleados and users, joined by strong keys (union-find, cannot-link), stored in a persistent SQLite registry.
-3. **Detect**: regex identifiers + directory-driven name variants + gazetteer, resolved per thread/record with context (participants, row owner, nearby ids).
-4. **Pseudonymize + replace**: HMAC-seeded surrogates reserved in SQLite, written back with the original form (case, accents, separators, spelled emails, digit grouping).
-5. **Audit**: a Python port of the judge's `contiene` sweeps the output for every original form before publishing.
+Seven steps, each a module under `src/kipu/`. The design principle is that **the models propose,
+and the code decides, replaces and verifies.**
 
-Design notes: [docs/index.html](docs/index.html). Decisions and costs: [DECISIONS.md](DECISIONS.md).
+1. **Ingestion** (`ingest/`). Downloads chats, documents (PDF, Markdown, HTML) and tables (CSV,
+   XML) from the sources API. Every one is read in full, including metadata, HTML comments and
+   file names, and converted to one record schema; a raw copy is kept on disk.
+2. **Person directory** (`directory/`). Builds the list of who exists from the client and employee
+   tables and from the Slack users, before any free text is read. Each person gets a fixed
+   internal id in a SQLite registry.
+3. **Detection** (`detect/`, `llm/`). Rules find everything with a format: cédulas, phones,
+   emails, plates, addresses and every known name variant. Two LLMs then propose what the rules
+   cannot see (third parties, nicknames, data in prose). A proposal counts only if its exact text
+   exists in the record and passes shape checks.
+4. **Identity** (`identity/`). Decides which person each mention belongs to, using strong
+   identifiers (cédula, email, phone, client id, Slack uid) and union-find with cannot-link.
+   A stronger model breaks only the ties that the evidence leaves open, and the code verifies its answer.
+5. **Pseudonyms** (`pseudo/`). Generates a believable, same-gender, same-format identity for each
+   person, seeded by HMAC from a secret and the person id. Every pseudonym is reserved in the
+   registry, so it is unique and stable over time.
+6. **Replacement and generalization** (`replace/`). Swaps each detected span in place, keeping
+   its form (case, missing accents, separators, digit grouping). Information that identifies
+   someone without naming them (barrio, occupation, joining year) is made less precise.
+7. **Independent audit** (`audit/`). Searches the whole output for every original value with a
+   port of the judge's own normalization (accents, look-alike letters, separators). Any hit sends
+   that record back for reprocessing, and nothing is published until the audit is clean.
+
+Design page (diagram and the seven modules, English/Spanish):
+<https://juantoledo23.github.io/kipu-anonymizer/>. Pitch:
+<https://juantoledo23.github.io/kipu-anonymizer/pitch.html>. Both are also in [`docs/`](docs/README.md).
+
+## Key design decisions
+
+- **Rules first, LLM on top.** Rules alone fall short on free text, and an LLM alone invents and
+  over-redacts. The models only add what the rules missed, and the service still produces a full
+  output without them.
+- **The LLM returns exact strings, never rewritten text.** The code locates each string, checks
+  its shape and replaces it in place, so the rest of every record is byte-identical to the source.
+- **Persistent registry and deterministic pseudonyms.** Person ids and pseudonyms live in SQLite
+  and are never rebuilt. Random pseudonyms per run would have broken the dataset when the sources
+  grew.
+- **Independent auditor with reprocessing.** A separate pass sweeps the output for every known
+  original value, the same way the judge does. Leaks are reprocessed, never just reported.
+- **Identity by strong identifiers, never by name.** Two people with the same name stay two
+  people, and one person listed twice (same cédula and contact) is one.
+
+Details, costs and trade-offs: [DECISIONS.md](DECISIONS.md). Every defect found along the way:
+[docs/failures.md](docs/failures.md).
+
+## Quickstart
+
+Prerequisites: Python 3.13, [uv](https://docs.astral.sh/uv/), and Node ≥ 20 (for the official
+validator `validar.mjs`).
+
+```bash
+cp .env.example .env     # set PSEUDONYM_SECRET, FUENTES_URL, FUENTES_TOKEN; API keys for the LLM layer
+make install             # uv sync
+make run                 # service on http://localhost:9000 → curl localhost:9000/v1/health
+make lint test           # ruff + pytest
+```
+
+Evaluation:
+
+```bash
+make evaluate-sample     # sample corpus (own DATA_DIR and registry) + validator + sample tests + diff vs expected
+make evaluate-full       # live sources API + validator + public tests
+make preflight           # hostile leak sweep of data/out_full against the newest raw snapshot
+```
+
+`LLM_ENABLED=false` runs rules only. `LLM_MAX_COST_USD` (default 5) caps each run, and a run that
+hits the cap finishes with the rules. Every variable is documented in [`.env.example`](.env.example).
+
+**Deploy.** It runs as a Docker image (`make docker-build`) with a persistent volume at `/data`
+for the registry and the last output. Production runs on Fly.io as a single always-on machine;
+[docs/deploy.md](docs/deploy.md) covers secrets, redeploys, logs and the rule never to deploy
+during an evaluation run.
+
+## API
+
+Served under `/v1` (and at the root). With `ENTRYPOINT_TOKEN` set, every route except `/health`
+requires `Authorization: Bearer <token>`. The contract is
+[`api/participante.openapi.yaml`](api/participante.openapi.yaml).
+
+| Method | Path | What it does |
+|---|---|---|
+| `GET` | `/health` | Liveness, team, version and the configured models. |
+| `POST` | `/run` | Starts a full regeneration from the sources API and returns a `job_id` (202). |
+| `GET` | `/run/{job_id}` | Job status, record counts, audit result, tokens and cost. |
+| `GET` | `/output/{file}` | One of the four files of the last completed run (`chats.jsonl`, `docs.jsonl`, `tables.jsonl`, `entities.json`). |
+| `GET` | `/entities` | The full pseudonym dictionary (`entities.json`), for the judge only. |
+| `POST` | `/anonymize` | Anonymizes new records live, with the same pseudonyms as the run. |
+
+A failed run never replaces the last good output, and jobs survive restarts.
+
+## Repository layout
+
+```
+src/kipu/
+  ingest/      sources API client, local replay, parsers for PDF/MD/HTML/CSV/XML
+  directory/   persons from master tables and Slack users; SQLite registry
+  identity/    union-find with cannot-link; homonym resolution
+  detect/      regex detectors, name index, gazetteer of kept terms, quasi-identifiers
+  llm/         model client and cache, extraction, verification, omissions pass, generalization
+  pseudo/      HMAC-seeded surrogates and Colombian name lists
+  replace/     form-preserving rendering and generalization (occupation, barrio)
+  audit/       port of the validator's normalization; leak auditor
+  anonymizer.py, pipeline.py, api.py, entities.py, config.py
+scripts/       evaluator, preflight sweep, identity and quasi-identifier checkers, source watcher
+tests/         unit and service tests; redteam/ adversarial cases; js/ parity harness
+docs/          design page, pitch, deploy guide, failure log
+api/           OpenAPI contracts (provided by the challenge)
+validar.mjs    official output validator (provided by the challenge)
+ENUNCIADO.md   challenge brief (Spanish, provided by the challenge)
+```
+
+## Evaluation and verification
+
+| Tool | What it checks |
+|---|---|
+| `scripts/evaluate.py` | Runs `validar.mjs`, then every local test by family (direct, hidden, false positive, homonyms, consistency, indirect), and optionally a field diff against an expected output. Exits 1 on any failure. |
+| `scripts/preflight.py` | Hostile leak sweep with the judge's matching: every master-table value, every Slack name, handle, email and phone, person names in doc metadata, undeclared emails/phones/cédulas/plates, UPPERCASE-without-accents forms. Also checks structure against `record_index.json`. |
+| `tests/redteam/sweep_output.py` | Red-team sweep A1–A7 of an output against its raw snapshot; `run_anonymize_cases.py` sends adversarial `/anonymize` cases (lowercase, spelled emails, Cyrillic look-alikes, homonyms) to a live service. |
+| `scripts/quasi_check.py` | For each person with a master row, finds records where barrio, occupation and year (cargo, city and year for employees) still co-occur. Fails on any record with all three. |
+| `scripts/identity_audit.py` | Same-name persons, unlinked chat users, records an entity misses, forms declared by two entities, and pseudonyms changed since a baseline. Runs on a copy of the registry. |
+| `scripts/judge_identity.py` | Replays the judge's consistency and homonym families over every person in the registry, not just the few the public tests name. |
+
+`make lint test` runs 155 automated tests, including a parity harness that checks the Python
+normalization against the validator's JavaScript.
+
+## Limits and non-goals
+
+- **Ambiguous bare mentions.** A lone given name or surname with no participant, identifier or
+  context to anchor it may be left as is or assigned to the wrong homonym. The rules prefer
+  leaving a common word alone over replacing it.
+- **No manual recall annotation.** Recall is measured against every value the master tables
+  and Slack know, against the challenge's tests and against adversarial cases, not against a
+  hand-labelled corpus. A third party who appears only in prose and is missed by both models
+  and the omission pass would not be counted.
+- **Pseudonymization, not differential privacy.** The output keeps real structure, dates, amounts
+  and generalized quasi-identifiers, and gives no formal guarantee against linkage attacks. The
+  registry is a re-identification key; it stays on the server and is never part of what is sold.
+- **Third-party models.** With the LLM layer on, record text is sent to the model providers
+  (through OpenRouter, with Anthropic as fallback). Run with `LLM_ENABLED=false` where that is
+  not acceptable.
+- **Legal basis is out of scope.** Consent, purpose limitation and compliance with Colombian data
+  protection law (Ley 1581 de 2012) are the data owner's decisions, not this service's.
+
+## License and author
+
+[MIT](LICENSE) © 2026 Juan Toledo. Built for the Frontier challenge. The challenge material
+(`ENUNCIADO.md`, `api/`, `validar.mjs`) belongs to its organizers.

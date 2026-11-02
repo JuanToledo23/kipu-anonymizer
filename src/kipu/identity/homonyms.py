@@ -10,7 +10,7 @@ from kipu.directory.directory import Directory, Person
 from kipu.directory.names import fold, split_name
 from kipu.ingest.records import TableRecord
 
-# Hyphenated codes with a digit ("S-2608-01", "4471-0150"); record keys and dates excluded.
+# Hyphenated codes with a digit ("S-2608-01", "5832-0274"); record keys and dates excluded.
 REFERENCE = re.compile(r"\b(?=[A-Z0-9-]*\d)[A-Z0-9]+(?:-[A-Z0-9]+)+\b")
 NOT_REFERENCE = re.compile(r"^(?:(?:CL|PG|KP|PQR)-|\d{4}-\d{2}-\d{2}$)")
 ANCHOR_TYPES = ("email", "handle", "cliente_id", "kp_id", "cedula", "phone", "radicado")

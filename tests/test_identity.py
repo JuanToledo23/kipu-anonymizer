@@ -17,16 +17,16 @@ def test_strong_keys_join_and_homonyms_stay_apart(registry) -> None:
         [
             client_seed(
                 "CL-1",
-                "Camila Arango Velásquez",
-                "1022649507",
-                "camila.arango@gmail.com",
-                "3506162589",
+                "Camila Osorio Velásquez",
+                "1023759618",
+                "camila.osorio@gmail.com",
+                "3517273690",
             ),
             client_seed(
-                "CL-2", "Camila Arango Mejía", "1035372961", "carango@icloud.com", "3176034960"
+                "CL-2", "Camila Osorio Mejía", "1046483072", "cosorio@icloud.com", "3187145071"
             ),
-            user_seed("U1", "Camila Arango", "carango"),
-            user_seed("U2", "Camila Arango", "camila.arango"),
+            user_seed("U1", "Camila Osorio", "cosorio"),
+            user_seed("U2", "Camila Osorio", "camila.osorio"),
         ],
         {},
     )
@@ -58,19 +58,19 @@ def test_registry_ids_are_stable_across_runs(registry) -> None:
 def test_shared_email_across_corpora_does_not_merge_persons(registry) -> None:
     old = Directory(registry)
     old.add_seeds(
-        [client_seed("CL-1", "Manuela Castaño Ruiz", "111111", "mcastano@gmail.com", "3001111111")],
+        [client_seed("CL-1", "Manuela Cardeño Ruiz", "111111", "mcardeno@gmail.com", "3001111111")],
         {},
     )
     manuela = old.owner_of("cliente_id", "CL-1")
     new = Directory(registry)
     new.add_seeds(
-        [client_seed("CL-2", "Martina Castaño Díaz", "222222", "mcastano@gmail.com", "3002222222")],
+        [client_seed("CL-2", "Martina Cardeño Díaz", "222222", "mcardeno@gmail.com", "3002222222")],
         {},
     )
     martina = new.owner_of("cliente_id", "CL-2")
     assert martina != manuela
-    assert new.owner_of("email", "mcastano@gmail.com") == martina
-    assert Directory.from_registry(registry).persons[manuela].name.full == "Manuela Castaño Ruiz"
+    assert new.owner_of("email", "mcardeno@gmail.com") == martina
+    assert Directory.from_registry(registry).persons[manuela].name.full == "Manuela Cardeño Ruiz"
 
 
 def test_relisted_client_row_joins_the_person_on_cedula_and_contact(registry) -> None:

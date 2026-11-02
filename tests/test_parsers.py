@@ -16,13 +16,13 @@ def test_markdown_front_matter_is_metadata_and_kept_in_body() -> None:
 
 def test_html_keeps_meta_and_comments() -> None:
     html = (
-        '<html><head><meta name="author" content="Adrián Ospina"><title>T</title></head>'
+        '<html><head><meta name="author" content="Adrián Quintero"><title>T</title></head>'
         "<body><h1>Hola</h1><p>Texto <a href='mailto:a@b.co'>a@b.co</a></p>"
         "<table><tr><th>A</th></tr><tr><td>1</td></tr></table><!-- por x@y.co --></body></html>"
     )
     body, metadata = html_to_markdown(html)
-    assert metadata == {"author": "Adrián Ospina"}
-    assert '<meta name="author" content="Adrián Ospina">' in body
+    assert metadata == {"author": "Adrián Quintero"}
+    assert '<meta name="author" content="Adrián Quintero">' in body
     assert "# Hola" in body and "Texto a@b.co" in body and "| A |" in body
     assert "<!-- por x@y.co -->" in body
 

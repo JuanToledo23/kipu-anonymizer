@@ -6,7 +6,6 @@ model never sees our surrogates.
 """
 
 import asyncio
-import json
 import logging
 from collections import defaultdict
 from collections.abc import Iterable
@@ -337,10 +336,6 @@ async def run_units(
         unit_id, model, candidates = task.result()
         results[unit_id][model] = candidates
     return results
-
-
-def dump_candidates(candidates: list[Candidate]) -> str:
-    return json.dumps([c.__dict__ for c in candidates], ensure_ascii=False)
 
 
 def _ts(value: str) -> float:

@@ -124,7 +124,7 @@ def _oldest_first(renderer: Renderer, person_id: str) -> dict[str, list[str]]:
 
 
 def _drop_shared_originals(entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """A form declared by two entities ("Luis Santander" for two homonyms) names neither;
+    """A form declared by two entities ("Luis Bolívar" for two homonyms) names neither;
     looking a person up by it would find both. It stays replaced in the records. An entity
     known only by shared forms (two third parties called "María") keeps them if it is the
     oldest to; a newer one is not declared, so growth never removes an entity."""

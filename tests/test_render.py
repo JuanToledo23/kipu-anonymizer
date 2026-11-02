@@ -6,7 +6,7 @@ from kipu.replace.render import fit_digits, format_date, spell_email
 
 
 def chat(
-    rid: str, text: str, author: str = "Manuela Castaño", files: tuple[str, ...] = ()
+    rid: str, text: str, author: str = "Manuela Cardeño", files: tuple[str, ...] = ()
 ) -> ChatRecord:
     return ChatRecord(
         id=rid,
@@ -19,7 +19,7 @@ def chat(
 
 
 def test_helpers() -> None:
-    assert fit_digits("1.107.360.039", "1107252808") == "1.107.252.808"
+    assert fit_digits("1.108.470.149", "1107252808") == "1.107.252.808"
     assert fit_digits("+57 321 252 4068", "3001234567") == "+57 300 123 4567"
     assert format_date("1998-11-11", "dmy") == "11/11/1998"
     assert spell_email("szambrano@gmail.com", False) == "szambrano arroba gmail punto com"
@@ -27,13 +27,13 @@ def test_helpers() -> None:
 
 def test_forms_are_preserved(anonymizer) -> None:
     records = [
-        chat("1", "Hola, me llamo Manuela Castaño.", files=("extracto_manuela_castano_julio.pdf",)),
-        chat("2", "EXTRACTO DE MANUELA CASTANO RUIZ"),
-        chat("3", "Mi correo es mcastano arroba gmail punto com y la cédula 1.107.360.039"),
+        chat("1", "Hola, me llamo Manuela Cardeño.", files=("extracto_manuela_cardeno_julio.pdf",)),
+        chat("2", "EXTRACTO DE MANUELA CARDENO RUIZ"),
+        chat("3", "Mi correo es mcardeno arroba gmail punto com y la cédula 1.108.470.149"),
     ]
     out = {r["id"]: r for r in anonymizer.chats(records)}
     sur = anonymizer.factory.name(
-        anonymizer.directory.persons[anonymizer.author_person("Manuela Castaño")]
+        anonymizer.directory.persons[anonymizer.author_person("Manuela Cardeño")]
     )
     assert out["1"]["text"] == f"Hola, me llamo {sur.short}."
     assert out["1"]["author"] == sur.short
@@ -43,8 +43,8 @@ def test_forms_are_preserved(anonymizer) -> None:
     upper = out["2"]["text"]
     assert upper.isupper() and upper.isascii() and "MANUELA" not in upper
     spelled = out["3"]["text"]
-    assert " arroba " in spelled and " punto com" in spelled and "mcastano" not in spelled
-    assert "1.107.360.039" not in spelled and len(spelled.split()[-1]) == len("1.107.360.039")
+    assert " arroba " in spelled and " punto com" in spelled and "mcardeno" not in spelled
+    assert "1.108.470.149" not in spelled and len(spelled.split()[-1]) == len("1.108.470.149")
     assert token
 
 
@@ -52,8 +52,8 @@ def test_first_name_only_for_thread_participants(anonymizer) -> None:
     out = anonymizer.chats(
         [
             chat("1", "Me están cobrando dos veces."),
-            chat("2", "Hola Manuela, soy Kelly de soporte.", author="Kelly Castaño"),
-            chat("3", "Gracias Camila, ya quedó.", author="Kelly Castaño"),
+            chat("2", "Hola Manuela, soy Kelly de soporte.", author="Kelly Cardeño"),
+            chat("3", "Gracias Camila, ya quedó.", author="Kelly Cardeño"),
         ]
     )
     assert "Manuela" not in out[1]["text"] and "Kelly" not in out[1]["text"]
@@ -73,7 +73,7 @@ def test_kept_entities_untouched(anonymizer) -> None:
 
 
 def test_accents_follow_the_written_tokens(anonymizer) -> None:
-    out = anonymizer.chats([chat("1", "Revisar a Camila Arango (CL-12538) hoy.", author="Kipi")])
+    out = anonymizer.chats([chat("1", "Revisar a Camila Osorio (CL-12538) hoy.", author="Kipi")])
     person = anonymizer.directory.persons[anonymizer.directory.owner_of("cliente_id", "CL-12538")]
     assert anonymizer.factory.name(person).short in out[0]["text"]
 
@@ -82,7 +82,7 @@ def test_reports_to_points_at_the_employee_homonym(anonymizer) -> None:
     row = TableRecord(
         id="empleados:KP-006",
         table="empleados",
-        columns={"id": "KP-006", "nombre": "Clara Montoya Zapata", "reporta_a": "Luis Santander"},
+        columns={"id": "KP-006", "nombre": "Clara Benítez Zapata", "reporta_a": "Luis Bolívar"},
     )
     out = anonymizer.tables([row])[0]["columns"]["reporta_a"]
     boss = anonymizer.directory.persons[anonymizer.directory.owner_of("kp_id", "KP-005")]
@@ -90,12 +90,12 @@ def test_reports_to_points_at_the_employee_homonym(anonymizer) -> None:
 
 
 def test_homonyms_split_by_nearby_client_id(registry, directory) -> None:
-    directory.external_person("Camila Arango", "")
+    directory.external_person("Camila Osorio", "")
     anonymizer = Anonymizer(registry, directory, SECRET)
     out = anonymizer.chats(
         [
-            chat("1", "Revisar a Camila Arango (CL-12538) hoy.", author="Kipi"),
-            chat("2", "Revisar a Camila Arango (CL-57176) hoy.", author="Kipi"),
+            chat("1", "Revisar a Camila Osorio (CL-12538) hoy.", author="Kipi"),
+            chat("2", "Revisar a Camila Osorio (CL-57176) hoy.", author="Kipi"),
         ]
     )
     for record, key in zip(out, ("CL-12538", "CL-57176"), strict=True):
@@ -108,15 +108,15 @@ def test_pagalo_client_id_in_text_is_evidence_for_the_homonym(registry) -> None:
     directory.add_seeds(
         [
             client_seed(
-                "CL-1001", "Camila Arango Velásquez", "111111", "ca@gmail.com", "3001111111"
+                "CL-1001", "Camila Osorio Velásquez", "111111", "ca@gmail.com", "3001111111"
             ),
-            client_seed("PG-2002", "Camila Arango Mejía", "222222", "cam@gmail.com", "3002222222"),
+            client_seed("PG-2002", "Camila Osorio Mejía", "222222", "cam@gmail.com", "3002222222"),
         ],
         {},
     )
     anonymizer = Anonymizer(registry, directory, SECRET)
-    record = chat("1", "Caso PG-2002: Camila Arango pide el extracto.", author="Kipi")
+    record = chat("1", "Caso PG-2002: Camila Osorio pide el extracto.", author="Kipi")
     anonymizer.chats([record])
-    name = next(m for m in anonymizer.spans[("1", "text")] if m.text == "Camila Arango")
+    name = next(m for m in anonymizer.spans[("1", "text")] if m.text == "Camila Osorio")
     assert name.person_id == directory.owner_of("cliente_id", "PG-2002")
     assert "PG-2002" in anonymizer.chats([record])[0]["text"]

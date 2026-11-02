@@ -46,9 +46,9 @@ def test_given_name_linking(anonymizer: Anonymizer, directory: Directory) -> Non
 def test_homonyms_need_cited_evidence(anonymizer: Anonymizer, directory: Directory) -> None:
     a = person(directory, "cliente_id", "CL-12538")
     b = person(directory, "cliente_id", "CL-57176")
-    text = "Reclamo de Camila Arango. Al final del caso: ver CL-12538 para el soporte."
+    text = "Reclamo de Camila Osorio. Al final del caso: ver CL-12538 para el soporte."
     group = Group([Surface("m", "text", text)], scope="t9")
-    span = Span("m", "text", 11, 24, "Camila Arango", "PERSON")
+    span = Span("m", "text", 11, 24, "Camila Osorio", "PERSON")
     asked: list[dict] = []
 
     def judge(name: str, candidates: list[str], txt: str, evidence: dict) -> str | None:
@@ -61,7 +61,7 @@ def test_homonyms_need_cited_evidence(anonymizer: Anonymizer, directory: Directo
     assert asked == [{a: ["CL-12538"], b: []}]
     lying = {"person_id": b, "evidence": "ver CL-12538"}
     assert checked_verdict(lying, [a, b], text, {a: ["CL-12538"], b: []}) is None
-    no_evidence = Group([Surface("m", "text", "Camila Arango escribió")], scope="t9")
+    no_evidence = Group([Surface("m", "text", "Camila Osorio escribió")], scope="t9")
     separate, _ = hook(anonymizer, judge)._person(span, no_evidence, [])
     assert separate not in (a, b) and len(asked) == 1
 
@@ -70,7 +70,7 @@ THREAD = [
     ChatRecord(
         id="m1",
         thread_id="t1",
-        author="Manuela Castaño",
+        author="Manuela Cardeño",
         ts="1",
         text="Hola, el giro lo hizo mi cuñado Yeferson Mosquera, él tiene 52 años.",
         attachments=[],
@@ -78,7 +78,7 @@ THREAD = [
     ChatRecord(
         id="m2",
         thread_id="t1",
-        author="Kelly Castaño",
+        author="Kelly Cardeño",
         ts="2",
         text="Gracias. ¿Yeferson Mosquera tiene cuenta en Kipu Pay?",
         attachments=[],
@@ -119,10 +119,10 @@ def test_third_party_becomes_a_new_person(
 
 
 def test_leaked_forms_are_replaced_where_they_leak() -> None:
-    entities = [{"entity_id": "p_9", "originals": ["4471-0150", "Yeferson Mosquera"]}]
-    records = [{"id": "b", "text": "crédito 4471-0150 de Yeferson Mosquera"}]
-    raw = {("b", "text"): "crédito 4471-0150 de Yeferson Mosquera"}
-    spans = audit_spans(records, entities, raw, {}, lambda form: form == "4471-0150")
+    entities = [{"entity_id": "p_9", "originals": ["5832-0274", "Yeferson Mosquera"]}]
+    records = [{"id": "b", "text": "crédito 5832-0274 de Yeferson Mosquera"}]
+    raw = {("b", "text"): "crédito 5832-0274 de Yeferson Mosquera"}
+    spans = audit_spans(records, entities, raw, {}, lambda form: form == "5832-0274")
     assert [(s.start, s.end, s.label, s.person_id) for s in spans] == [
         (8, 17, "ACCOUNT", "p_9"),
         (21, 38, "PERSON", "p_9"),

@@ -1,6 +1,6 @@
 from test_render import chat
 
-CLIENT = "Camila Arango Velásquez"
+CLIENT = "Camila Osorio Velásquez"
 
 
 def owner(anonymizer, id_type: str, value: str) -> str | None:
@@ -12,8 +12,8 @@ def short_of(anonymizer, person_id: str) -> str:
 
 
 def test_known_name_with_a_contradicting_cedula_is_a_new_person(anonymizer) -> None:
-    manuela = owner(anonymizer, "cedula", "1107360039")
-    out = anonymizer.chats([chat("1", "Soy Manuela Castaño Ruiz, CC 52123456", author=CLIENT)])
+    manuela = owner(anonymizer, "cedula", "1108470149")
+    out = anonymizer.chats([chat("1", "Soy Manuela Cardeño Ruiz, CC 52123456", author=CLIENT)])
     homonym = owner(anonymizer, "cedula", "52123456")
     assert homonym not in (None, manuela, anonymizer.author_person(CLIENT))
     assert short_of(anonymizer, homonym) in out[0]["text"]
@@ -22,7 +22,7 @@ def test_known_name_with_a_contradicting_cedula_is_a_new_person(anonymizer) -> N
 
 def test_known_name_with_a_first_phone_is_the_same_person(anonymizer) -> None:
     kelly = owner(anonymizer, "kp_id", "KP-016")
-    anonymizer.chats([chat("1", "Kelly Castaño Jiménez, cel 3001234567", author=CLIENT)])
+    anonymizer.chats([chat("1", "Kelly Cardeño Jiménez, cel 3001234567", author=CLIENT)])
     assert owner(anonymizer, "phone", "3001234567") == kelly
 
 
@@ -48,11 +48,11 @@ def test_identifier_links_to_a_name_up_to_forty_characters_before(anonymizer) ->
     author = anonymizer.author_person(CLIENT)
     anonymizer.chats(
         [
-            chat("1", "me llamo Kelly Castaño Jiménez y mi cédula es 1012345678", author=CLIENT),
-            chat("2", "Kelly Castaño Jiménez (CC 1012345679)", author=CLIENT),
+            chat("1", "me llamo Kelly Cardeño Jiménez y mi cédula es 1012345678", author=CLIENT),
+            chat("2", "Kelly Cardeño Jiménez (CC 1012345679)", author=CLIENT),
             chat(
                 "3",
-                "Kelly Castaño Jiménez me atendió muy bien ayer en la tarde, mi cel 3109998877",
+                "Kelly Cardeño Jiménez me atendió muy bien ayer en la tarde, mi cel 3109998877",
                 author=CLIENT,
             ),
         ]

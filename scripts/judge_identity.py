@@ -302,7 +302,7 @@ def _given_in_threads(
 
 
 def _bare_given(text: str, given: str, surnames: set[str]) -> bool:
-    """`given` as a name of its own, not inside someone else's ("Juan Carlos Salazar")."""
+    """`given` as a name of its own, not inside someone else's ("Juan Carlos Quintana")."""
     words = WORD.findall(text)
     folded = [fold(w) for w in words]
     target = fold(given).split()

@@ -1,12 +1,20 @@
+# Secrets and local data: never committed
 .env
 data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+entities.json
 muestra_para_chat.zip
+
+# Local notes and screenshots
+INVESTIGATION_*.md
+preview*.png
+
+# Tooling
 __pycache__/
 .venv/
 node_modules/
-preview.png
-*.sqlite
 .ruff_cache/
 .pytest_cache/
 .DS_Store
-INVESTIGATION_redteam.md

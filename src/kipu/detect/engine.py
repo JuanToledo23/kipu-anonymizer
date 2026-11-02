@@ -257,7 +257,7 @@ class Detector:
     def _split_homonyms(
         self, mentions: list[Mention], siblings: list[Mention], text: str
     ) -> list[Mention]:
-        """ "La PQR de Daniela Ordóñez con el extracto de Daniela Ordóñez: son dos clientas
+        """ "La PQR de Sofía Lemus con el extracto de Sofía Lemus: son dos clientas
         distintas con el mismo nombre": the mention nearest its evidence keeps the person,
         the others go to the other homonyms."""
         if not DISTINCT_CUE.search(text):

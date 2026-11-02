@@ -185,7 +185,7 @@ class SurrogateFactory:
         return self._reserve(person, "address", original, make)
 
     def plate(self, person: Person, original: str) -> str:
-        """`original` is the compact plate (`GTD596`); the renderer restores the separator."""
+        """`original` is the compact plate (`AAA123`); the renderer restores the separator."""
         return self._reserve(person, "plate", original, self._same_shape(original), str.upper)
 
     def passport(self, person: Person, original: str) -> str:

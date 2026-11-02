@@ -43,10 +43,10 @@ def directory(registry: Registry) -> Directory:
     seeds = [
         client_seed(
             "CL-88627",
-            "Manuela Castaño Ruiz",
-            "1107360039",
-            "mcastano@gmail.com",
-            "3148729552",
+            "Manuela Cardeño Ruiz",
+            "1108470149",
+            "mcardeno@gmail.com",
+            "3149830663",
             ciudad="Cali",
             barrio="Granada",
             ocupacion="fotógrafa",
@@ -54,21 +54,21 @@ def directory(registry: Registry) -> Directory:
         ),
         client_seed(
             "CL-12538",
-            "Camila Arango Velásquez",
-            "1022649507",
-            "camila.arango@gmail.com",
-            "3506162589",
+            "Camila Osorio Velásquez",
+            "1023759618",
+            "camila.osorio@gmail.com",
+            "3517273690",
         ),
         client_seed(
-            "CL-57176", "Camila Arango Mejía", "1035372961", "carango@icloud.com", "3176034960"
+            "CL-57176", "Camila Osorio Mejía", "1046483072", "cosorio@icloud.com", "3187145071"
         ),
         client_seed(
-            "CL-21823", "Luis Santander Moreno", "91338232", "lsantander@gmail.com", "3001112233"
+            "CL-21823", "Luis Bolívar Moreno", "91447343", "lbolivar@gmail.com", "3001112233"
         ),
         employee_seed(
-            "KP-005", "Luis Santander Ruiz", "luis.santander@kipupay.co", "Coordinador de Fraude"
+            "KP-005", "Luis Bolívar Ruiz", "luis.bolivar@kipupay.co", "Coordinador de Fraude"
         ),
-        employee_seed("KP-016", "Kelly Castaño Jiménez", "kelly.castano@kipupay.co", "Contadora"),
+        employee_seed("KP-016", "Kelly Cardeño Jiménez", "kelly.cardeno@kipupay.co", "Contadora"),
     ]
     d.add_seeds(seeds, {})
     return d

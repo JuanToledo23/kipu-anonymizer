@@ -135,11 +135,6 @@ def is_capitalized(word: str) -> bool:
     return bool(word) and word[0].isupper()
 
 
-def separator_of(span: str) -> str:
-    m = re.search(r"[ \t_.\-]+", span)
-    return m.group(0) if m else " "
-
-
 class NameIndex:
     """Maps folded token tuples of every name variant to (person_id, kind)."""
 

@@ -19,8 +19,8 @@ SAMPLE = Path(__file__).resolve().parent.parent / "data" / "sample"
 def test_declared_name_is_the_canonical_short_form(registry, directory) -> None:
     for live in (False, True):
         anonymizer = Anonymizer(registry, directory, SECRET, live=live)
-        out = anonymizer.chats([chat("1", "Soy Manuela Castaño Ruiz", author="Kipi")])
-        person = anonymizer.directory.persons[anonymizer.directory.owner_of("cedula", "1107360039")]
+        out = anonymizer.chats([chat("1", "Soy Manuela Cardeño Ruiz", author="Kipi")])
+        person = anonymizer.directory.persons[anonymizer.directory.owner_of("cedula", "1108470149")]
         entity = next(e for e in anonymizer.entities(out) if e["entity_id"] == person.person_id)
         assert entity["pseudonyms"]["name"] == anonymizer.factory.name(person).short
 

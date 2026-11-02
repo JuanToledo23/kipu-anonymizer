@@ -16,24 +16,24 @@ def manuela(directory) -> str:
 def test_handles_inside_urls_and_paths(directory) -> None:
     pid = manuela(directory)
     for text in (
-        "https://kipupay.co/credito/simular?ref=mcastano&canal=chat",
-        "kit: https://kipupay.co/onboarding/kit?u=MCastano&lang=en",
-        "https://kipupay.co/u/mcastano/perfil",
-        "usuario mcastano.",
-        "reporte_mcastano_2026.pdf",
+        "https://kipupay.co/credito/simular?ref=mcardeno&canal=chat",
+        "kit: https://kipupay.co/onboarding/kit?u=MCardeno&lang=en",
+        "https://kipupay.co/u/mcardeno/perfil",
+        "usuario mcardeno.",
+        "reporte_mcardeno_2026.pdf",
     ):
-        start = text.lower().index("mcastano")
+        start = text.lower().index("mcardeno")
         assert handles(directory, text) == [(text[start : start + 8], pid)], text
 
 
 def test_handle_needs_token_boundaries(directory) -> None:
-    assert handles(directory, "magomez xmcastano mcastano2 kelly.castanos") == []
+    assert handles(directory, "magomez xmcardeno mcardeno2 kelly.cardenos") == []
 
 
 def test_at_mentions_known_and_unknown(directory) -> None:
     kelly = directory.owner_of("kp_id", "KP-016")
-    assert handles(directory, "publica como @kelly.castano; avisen a @pedro.perez.") == [
-        ("kelly.castano", kelly),
+    assert handles(directory, "publica como @kelly.cardeno; avisen a @pedro.perez.") == [
+        ("kelly.cardeno", kelly),
         ("pedro.perez", None),
     ]
     assert handles(directory, "@here @channel <@U0LAKVS3G> @kipupay") == []
@@ -44,16 +44,16 @@ def test_handles_are_replaced_with_the_email_local_part_surrogate(anonymizer) ->
         ChatRecord(
             id="1",
             thread_id="t:1",
-            author="Manuela Castaño",
+            author="Manuela Cardeño",
             ts="1.1",
-            text="Te dejo el link: https://kipupay.co/simular?ref=mcastano&canal=chat",
+            text="Te dejo el link: https://kipupay.co/simular?ref=mcardeno&canal=chat",
             attachments=[],
         )
     ]
     text = anonymizer.chats(records)[0]["text"]
-    assert "mcastano" not in text.lower()
+    assert "mcardeno" not in text.lower()
     person = anonymizer.directory.persons[manuela(anonymizer.directory)]
-    local = anonymizer.factory.email(person, "mcastano@gmail.com").split("@")[0]
+    local = anonymizer.factory.email(person, "mcardeno@gmail.com").split("@")[0]
     assert f"?ref={local}&canal=chat" in text
 
 
@@ -82,7 +82,7 @@ def test_shared_handle_goes_to_the_thread_participant(registry, directory) -> No
     directory.add_seeds(
         [
             client_seed(
-                "CL-99999", "Mateo Castaño Rojas", "1000000001", "mcastano@yahoo.com", "3000000001"
+                "CL-99999", "Mateo Cardeño Rojas", "1000000001", "mcardeno@yahoo.com", "3000000001"
             )
         ],
         {},
@@ -90,16 +90,16 @@ def test_shared_handle_goes_to_the_thread_participant(registry, directory) -> No
     anonymizer = Anonymizer(registry, directory, SECRET)
     manuela_id = manuela(directory)
     mateo = directory.owner_of("cliente_id", "CL-99999")
-    for author, owner in (("Manuela Castaño", manuela_id), ("Mateo Castaño", mateo)):
+    for author, owner in (("Manuela Cardeño", manuela_id), ("Mateo Cardeño", mateo)):
         record = ChatRecord(
             id=author,
             thread_id=author,
             author=author,
             ts="1.1",
-            text="ref=mcastano",
+            text="ref=mcardeno",
             attachments=[],
         )
         text = anonymizer.chats([record])[0]["text"]
         person = directory.persons[owner]
-        email = next(e for e in person.identifiers["email"] if e.startswith("mcastano@"))
-        assert text == "ref=" + anonymizer.factory.handle(person, "mcastano", email), author
+        email = next(e for e in person.identifiers["email"] if e.startswith("mcardeno@"))
+        assert text == "ref=" + anonymizer.factory.handle(person, "mcardeno", email), author

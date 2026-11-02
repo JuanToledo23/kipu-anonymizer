@@ -89,7 +89,7 @@ def test_common_words_are_not_persons(anonymizer: Anonymizer) -> None:
     v = verifier(anonymizer)
     u = unit(
         "Hola. Compré un televisor",
-        "Crédito vehicular placa GTD596. Esposo autorizado",
+        "Crédito vehicular placa HMV318. Esposo autorizado",
         "Saludos, Equipo Kipu",
     )
     by_model = {
